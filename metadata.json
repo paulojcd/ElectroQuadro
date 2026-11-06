@@ -1,0 +1,6 @@
+{
+  "name": "ElectroCad DIN - Esquematizador de Quadros",
+  "description": "Software profissional para projeto e esquematização de quadros elétricos residenciais (RTIEBT / EN 61439-3) e de automação industrial (EN 60204-1), com calhas DIN, unifilar automático, cálculo de fiação e lista BOM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
