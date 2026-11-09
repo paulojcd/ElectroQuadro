@@ -303,13 +303,17 @@ export const BomTable: React.FC<BomTableProps> = ({ project }) => {
               className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
             >
               <option value="all">Todas as Marcas</option>
-              <option value="Mean Well">Mean Well</option>
-              <option value="Siemens">Siemens</option>
-              <option value="Legrand">Legrand (Bornes Viking 3)</option>
-              <option value="Finder">Finder (Relés & Temporizadores)</option>
               <option value="Schneider Electric">Schneider Electric</option>
+              <option value="Rittal">Rittal</option>
+              <option value="Hager">Hager</option>
+              <option value="Legrand">Legrand</option>
+              <option value="Siemens">Siemens</option>
+              <option value="Mean Well">Mean Well</option>
+              <option value="Finder">Finder</option>
               <option value="Phoenix Contact">Phoenix Contact</option>
               <option value="Weidmüller">Weidmüller</option>
+              <option value="Gewiss">Gewiss</option>
+              <option value="Eldon / nVent">Eldon / nVent</option>
             </select>
 
             {/* Category Filter */}
@@ -319,6 +323,7 @@ export const BomTable: React.FC<BomTableProps> = ({ project }) => {
               className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
             >
               <option value="all">Todas as Categorias</option>
+              <option value="enclosure">Quadros & Invólucros</option>
               <option value="power_supply">Fontes de Alimentação DIN</option>
               <option value="plc_cpu">CPUs Siemens</option>
               <option value="plc_expansion">Expansões Siemens</option>
@@ -328,6 +333,7 @@ export const BomTable: React.FC<BomTableProps> = ({ project }) => {
               <option value="protection_dc">Proteções DC</option>
               <option value="motor_control">Comando Motores / Contactores</option>
               <option value="safety_relays">Segurança / Emergência</option>
+              <option value="accessories">Acessórios / Bucins / Porta</option>
             </select>
           </div>
         </div>

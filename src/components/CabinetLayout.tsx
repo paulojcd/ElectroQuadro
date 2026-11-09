@@ -1,7 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ProjectState, PlacedComponent, DinRail, CatalogItem, WireConnection, SimulationState, CableGland, GlandMetric, GlandLocation, GlandCircuitType, ControlPanelConfig, ControlPanelDevice } from '../types/electrical';
+import { ProjectState, PlacedComponent, DinRail, CatalogItem, WireConnection, SimulationState, CableGland, GlandMetric, GlandLocation, GlandCircuitType, ControlPanelConfig, ControlPanelDevice, EnclosureModel, EnclosureMaterial } from '../types/electrical';
 import { COMPONENT_CATALOG } from '../data/componentLibrary';
 import { getDefaultControlPanelConfig } from '../data/controlPanelCatalog';
+import { 
+  STANDARD_ENCLOSURE_CATALOG, 
+  getDefaultEnclosurePrice, 
+  saveCustomEnclosure, 
+  getCustomEnclosures 
+} from '../data/enclosureCatalog';
+import { EnclosurePickerModal } from './EnclosurePickerModal';
 import { 
   generateDefaultWires, 
   simulateCircuit, 
@@ -23,7 +30,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, Minimize2, Download, Activity, Power, RotateCcw,
   Eye, EyeOff, Radio, Wrench, ArrowUpCircle, ArrowDownCircle, Save, FileCode, FileText, PlusCircle, Ruler, Tag,
   Magnet, Grid, FileSpreadsheet, Printer, Copy, BookOpen, ShieldAlert, ListChecks, Clock, Wind, Flame, Table,
-  DoorClosed, Move, ExternalLink, Scissors, SlidersHorizontal, ChevronDown, ChevronUp, Layout
+  DoorClosed, Move, ExternalLink, Scissors, SlidersHorizontal, ChevronDown, ChevronUp, Layout, Euro
 } from 'lucide-react';
 import { useComponentCatalog } from '../utils/customComponentStorage';
 import { 
@@ -34,6 +41,8 @@ import {
 } from '../utils/terminalLayoutUtils';
 import { routeManhattanWire } from '../utils/manhattanRouter';
 import { WiringListModal } from './WiringListModal';
+import { ComponentSvgPickerModal } from './ComponentSvgPickerModal';
+import { svgToDataUri } from '../utils/componentSvgLibrary';
 import { exportWiringListToCsv, getProjectWiringList } from '../utils/wiringListExporter';
 import { ComponentTechnicalTooltip } from './ComponentTechnicalTooltip';
 
@@ -47,6 +56,15 @@ export interface HmiPresetSpec {
   cutoutHeightMm: number; // Furação CNC
   depthMm: number; // Profundidade interior
   diagonalInches: string;
+}
+
+export interface NearestRailData {
+  index: number;
+  name: string;
+  yMm: number;
+  centerRailY: number;
+  distY: number;
+  itemCount: number;
 }
 
 export const HMI_PRESETS: HmiPresetSpec[] = [
@@ -127,6 +145,7 @@ interface CabinetLayoutProps {
   onOpenIdMap?: () => void;
   onOpenStandaloneGuide?: () => void;
   onOpenControlPanel?: () => void;
+  onOpenDrillingTemplate?: () => void;
   isImmersiveMode?: boolean;
   onToggleImmersiveMode?: () => void;
   onQuickSave?: () => void;
@@ -179,6 +198,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
   onOpenIdMap,
   onOpenStandaloneGuide,
   onOpenControlPanel,
+  onOpenDrillingTemplate,
   isImmersiveMode = false,
   onToggleImmersiveMode,
   onQuickSave,
@@ -210,8 +230,11 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
   const [notesSubTab, setNotesSubTab] = useState<'editor' | 'templates' | 'structured'>('editor');
   const [copiedNotes, setCopiedNotes] = useState(false);
   const [quickRailIdx, setQuickRailIdx] = useState<number>(0);
-  const [quickCategory, setQuickCategory] = useState<'custom' | 'generic' | 'meanwell' | 'siemens' | 'viking' | 'relays'>('generic');
+  const [quickCategory, setQuickCategory] = useState<'custom' | 'generic' | 'contactors' | 'meanwell' | 'siemens' | 'viking' | 'relays'>('contactors');
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
+  const [isEnclosurePickerOpen, setIsEnclosurePickerOpen] = useState(false);
+  const [customEnclosureSaveName, setCustomEnclosureSaveName] = useState('');
+  const [isSavingCustomEnclosure, setIsSavingCustomEnclosure] = useState(false);
 
   const [internalIsGlandModalOpen, setInternalIsGlandModalOpen] = useState(false);
   const isGlandModalOpen = controlledIsGlandModalOpen !== undefined ? controlledIsGlandModalOpen : internalIsGlandModalOpen;
@@ -221,6 +244,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
   };
 
   const [isWiringListModalOpen, setIsWiringListModalOpen] = useState(false);
+  const [isSvgPickerOpen, setIsSvgPickerOpen] = useState(false);
   const [selectedGlandId, setSelectedGlandId] = useState<string | null>(null);
 
   const [internalIsAutoLayoutModalOpen, setInternalIsAutoLayoutModalOpen] = useState(false);
@@ -318,8 +342,11 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
     return getAllProjectTerminals(project);
   }, [project]);
 
-  // Derived wires and circuit simulation (pure, reactive, zero infinite loop risk)
-  const baseWires = useMemo(() => generateDefaultWires(project), [project]);
+  // Derived wires and circuit simulation (pure, reactive, respects user additions, deletions, or clearing)
+  const baseWires = useMemo(() => {
+    if (project.wires !== undefined) return project.wires;
+    return generateDefaultWires(project);
+  }, [project.wires, project]);
   const { updatedWires, updatedState } = useMemo(() => {
     return simulateCircuit(project, baseWires, simState);
   }, [project, baseWires, simState]);
@@ -780,29 +807,34 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
 
   // Delete a wire (custom or default)
   const handleDeleteWire = (wireToDelete: WireConnection) => {
-    const existing = project.wires || [];
-    const isCustom = existing.some((w) => w.id === wireToDelete.id);
-    let updated: WireConnection[];
-    if (isCustom) {
-      updated = existing.filter((w) => w.id !== wireToDelete.id);
-    } else {
-      updated = baseWires.filter(
-        (w) =>
-          w.id !== wireToDelete.id &&
-          !(
-            w.fromComponentId === wireToDelete.fromComponentId &&
-            w.fromTerminal === wireToDelete.fromTerminal &&
-            w.toComponentId === wireToDelete.toComponentId &&
-            w.toTerminal === wireToDelete.toTerminal
-          )
-      );
-    }
+    const current = project.wires !== undefined ? project.wires : generateDefaultWires(project);
+    const updated = current.filter(
+      (w) =>
+        w.id !== wireToDelete.id &&
+        !(
+          w.fromComponentId === wireToDelete.fromComponentId &&
+          w.fromTerminal === wireToDelete.fromTerminal &&
+          w.toComponentId === wireToDelete.toComponentId &&
+          w.toTerminal === wireToDelete.toTerminal
+        )
+    );
     onUpdateProject({
       ...project,
       wires: updated,
     });
     setSelectedWire(null);
-    setRecentNotification(`🗑️ Condutor ${wireToDelete.wireTag} removido.`);
+    setRecentNotification(`🗑️ Condutor ${wireToDelete.wireTag || 'selecionado'} removido.`);
+    setTimeout(() => setRecentNotification(null), 2500);
+  };
+
+  // Clear all wires from the cabinet
+  const handleClearAllWires = () => {
+    onUpdateProject({
+      ...project,
+      wires: [],
+    });
+    setSelectedWire(null);
+    setRecentNotification('🗑️ Todas as ligações foram removidas do quadro.');
     setTimeout(() => setRecentNotification(null), 2500);
   };
 
@@ -857,7 +889,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
       if (wireDragState) {
         const { fromAnchor, hoveredAnchor } = wireDragState;
         if (hoveredAnchor) {
-          const existingWires = project.wires || [];
+          const existingWires = project.wires !== undefined ? project.wires : generateDefaultWires(project);
           const isDuplicate = existingWires.some(
             (w) =>
               (w.fromComponentId === fromAnchor.componentId &&
@@ -875,7 +907,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
             setTimeout(() => setRecentNotification(null), 2500);
           } else {
             const props = deduceWireProperties(fromAnchor, hoveredAnchor);
-            const allCurrentWires = [...baseWires, ...existingWires];
+            const allCurrentWires = existingWires;
             const prefix =
               props.netType === 'pe_ground'
                 ? 'PE'
@@ -1122,6 +1154,47 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
     }
   };
 
+  // Apply or remove custom SVG file for a component
+  const handleApplyComponentSvg = (
+    instanceId: string,
+    customSvg?: string,
+    svgFileName?: string,
+    svgAspectMode: 'contain' | 'stretch' = 'contain'
+  ) => {
+    const targetRail = rails.find((r) => r.items.some((it) => it.instanceId === instanceId));
+    if (!targetRail) return;
+
+    const updatedRails = rails.map((r) => {
+      if (r.id !== targetRail.id) return r;
+      return {
+        ...r,
+        items: r.items.map((it) => {
+          if (it.instanceId !== instanceId) return it;
+          return {
+            ...it,
+            data: {
+              ...it.data,
+              customSvg,
+              svgFileName,
+              svgAspectMode,
+            },
+          };
+        }),
+      };
+    });
+
+    onUpdateProject({ ...project, rails: updatedRails });
+
+    if (selectedItem?.instanceId === instanceId) {
+      const updatedPlaced = updatedRails
+        .flatMap((r) => r.items)
+        .find((it) => it.instanceId === instanceId);
+      if (updatedPlaced) {
+        setSelectedItem(updatedPlaced);
+      }
+    }
+  };
+
   // Auto-arrange according to industrial standards
   const handleAutoOrganize = () => {
     const all = rails.flatMap((r) => r.items);
@@ -1253,9 +1326,94 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
     });
   };
 
+  // Seleção e gestão do modelo de invólucro / quadro elétrico como componente BOM
+  const handleSelectEnclosureModel = (model: EnclosureModel) => {
+    handleUpdateCabinetDimensions({
+      widthMm: model.widthMm,
+      heightMm: model.heightMm,
+      depthMm: model.depthMm,
+      ipRating: model.ipRating,
+      ikRating: model.ikRating,
+      enclosureMaterial: model.material,
+      railCount: model.recommendedRails || config.railCount,
+      enclosureModel: model,
+      enclosurePriceEur: model.estimatedPriceEur,
+      enclosureBrand: model.brand,
+      enclosurePartNumber: model.partNumber,
+    });
+    setRecentNotification(`Quadro selecionado: ${model.brand} ${model.name} (${model.partNumber}) - €${model.estimatedPriceEur.toFixed(2)} adicionado ao BOM`);
+    setTimeout(() => setRecentNotification(null), 4000);
+  };
+
+  const handleUpdateEnclosurePrice = (priceEur: number) => {
+    const valid = Math.max(0, isNaN(priceEur) ? 0 : priceEur);
+    handleUpdateCabinetDimensions({
+      enclosurePriceEur: valid,
+      enclosureModel: config.enclosureModel ? { ...config.enclosureModel, estimatedPriceEur: valid } : undefined,
+    });
+  };
+
+  const handleSaveCurrentAsCustomEnclosure = (customName?: string) => {
+    const chosenName = (customName || customEnclosureSaveName).trim() || `Quadro ${config.widthMm}x${config.heightMm} Personalizado`;
+    const curPrice = config.enclosurePriceEur ?? (config.enclosureModel?.estimatedPriceEur ?? getDefaultEnclosurePrice(config.widthMm, config.heightMm, config.depthMm, config.enclosureMaterial || 'sheet_steel'));
+    const newCustomModel: EnclosureModel = {
+      id: `custom-enc-${Date.now()}`,
+      name: chosenName,
+      brand: config.enclosureBrand || 'Personalizado / Fabrico Próprio',
+      partNumber: config.enclosurePartNumber || `QD-${config.widthMm}x${config.heightMm}`,
+      series: 'Personalizado',
+      widthMm: config.widthMm,
+      heightMm: config.heightMm,
+      depthMm: config.depthMm,
+      ipRating: config.ipRating || 'IP65',
+      ikRating: config.ikRating || 'IK08',
+      material: config.enclosureMaterial || 'sheet_steel',
+      doorType: config.hasDoor ? 'solid' : 'none',
+      mountingPlateIncluded: true,
+      recommendedRails: rails.length,
+      maxDinModules: Math.floor((usableWidth / 18) * rails.length),
+      estimatedPriceEur: curPrice,
+      description: `Quadro personalizado de ${config.widthMm}x${config.heightMm}x${config.depthMm}mm guardado na biblioteca de modelos para reutilização.`,
+      isCustom: true,
+    };
+
+    saveCustomEnclosure(newCustomModel);
+    handleUpdateCabinetDimensions({
+      enclosureModel: newCustomModel,
+      enclosurePriceEur: curPrice,
+      enclosureBrand: newCustomModel.brand,
+      enclosurePartNumber: newCustomModel.partNumber,
+    });
+    setCustomEnclosureSaveName('');
+    setIsSavingCustomEnclosure(false);
+    setRecentNotification(`Modelo "${chosenName}" guardado com sucesso na biblioteca de quadros reutilizáveis!`);
+    setTimeout(() => setRecentNotification(null), 4000);
+  };
+
+  // Validação em Tempo Real de Calhas DIN com Sobrecarga / Largura Excedida
+  const overfilledRails = useMemo(() => {
+    return rails
+      .map((r, idx) => {
+        const effUsable = r.usableWidthMm || usableWidth;
+        const sumW = r.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0);
+        const excess = Math.max(0, sumW - effUsable);
+        return {
+          id: r.id,
+          name: r.name || `Calha ${idx + 1}`,
+          index: idx,
+          sumW: Math.round(sumW),
+          usableW: Math.round(effUsable),
+          excess: Math.round(excess),
+          isOver: sumW > effUsable,
+          pct: effUsable > 0 ? Math.round((sumW / effUsable) * 100) : 0,
+        };
+      })
+      .filter((r) => r.isOver);
+  }, [rails, usableWidth]);
+
   // Gland (Bucins) calculations & handlers
   const glands: CableGland[] = useMemo(() => {
-    if (project.glands && project.glands.length > 0) return project.glands;
+    if (project.glands !== undefined) return project.glands;
     return getDefaultGlands(cabWidth, config.supplyVoltage.includes('400V'));
   }, [project.glands, cabWidth, config.supplyVoltage]);
 
@@ -1292,6 +1450,13 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
   const handleDeleteGland = (id: string) => {
     handleUpdateGlands(glands.filter((g) => g.id !== id));
     if (selectedGlandId === id) setSelectedGlandId(null);
+  };
+
+  const handleClearAllGlands = () => {
+    handleUpdateGlands([]);
+    setSelectedGlandId(null);
+    setRecentNotification('🗑️ Todos os bucins foram removidos do quadro.');
+    setTimeout(() => setRecentNotification(null), 2500);
   };
 
   const handleChangeGlandMetric = (id: string, newMetric: GlandMetric) => {
@@ -1370,28 +1535,84 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
     bezelTop < 45 ||
     bezelBottom > cabHeight - 45;
 
-  // Real-time Mechanical Interference / Collision Check
-  const hmiMechanicalClash = useMemo(() => {
+  // Real-time Mechanical Interference / Collision Check against Nearest DIN Rail & Interior Components
+  const hmiMechanicalClash = useMemo<{
+    hasClash: boolean;
+    collidingRails: { index: number; name: string; yMm: number; isNearest: boolean }[];
+    collidingComponents: {
+      instanceId: string;
+      tag: string;
+      name: string;
+      railIndex: number;
+      isNearestRail: boolean;
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+      depthMm: number;
+      clearanceMm: number;
+      overlapX: number;
+      overlapY: number;
+    }[];
+    nearestRail: NearestRailData | null;
+    isOutsideGasket: boolean;
+    chassisDepthMm: number;
+    cabDepthMm: number;
+    minClearanceMm: number;
+    safeY: number | null;
+  }>(() => {
     const hmiBoxLeft = cutoutLeft - 5;
     const hmiBoxRight = cutoutRight + 5;
     const hmiBoxTop = cutoutTop - 5;
     const hmiBoxBottom = cutoutBottom + 5;
 
-    const collidingRails: { index: number; name: string; yMm: number }[] = [];
+    const cabDepthMm = config.depthMm || 210;
+    const railMountHeightMm = 35; // Calha DIN 35x7.5/15mm + suportes de montagem
+    const hmiDepthWithConnectors = hmiDepthMm + 15; // Profundidade do corpo HMI + 15mm para conectores traseiros (RJ45 / 24V)
+
+    // Identify the nearest DIN rail by vertical center distance
+    let nearestRail: NearestRailData | null = null;
+    let minRailDist = Infinity;
+
+    rails.forEach((rail, rIdx) => {
+      const railY = 80 + rIdx * config.railSpacingMm;
+      const centerRailY = railY + 55;
+      const distY = Math.abs(centerRailY - hmiY);
+      if (distY < minRailDist) {
+        minRailDist = distY;
+        nearestRail = {
+          index: rIdx + 1,
+          name: rail.name || `Calha DIN ${rIdx + 1}`,
+          yMm: railY,
+          centerRailY,
+          distY,
+          itemCount: rail.items.length,
+        };
+      }
+    });
+
+    const collidingRails: { index: number; name: string; yMm: number; isNearest: boolean }[] = [];
     const collidingComponents: {
       instanceId: string;
       tag: string;
       name: string;
       railIndex: number;
+      isNearestRail: boolean;
       xMm: number;
       yMm: number;
       widthMm: number;
       heightMm: number;
+      depthMm: number;
+      clearanceMm: number;
+      overlapX: number;
+      overlapY: number;
     }[] = [];
 
     const sideDuctW = config.sideDuctWidthMm || 40;
     const railX = 24 + sideDuctW + 10;
     const usableW = cabWidth - 48 - (sideDuctW * 2) - 20;
+
+    let minClearanceMm = cabDepthMm - (hmiDepthWithConnectors + railMountHeightMm);
 
     rails.forEach((rail, rIdx) => {
       const railY = 80 + rIdx * config.railSpacingMm;
@@ -1400,12 +1621,14 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
 
       const railIntersectsY = !(railBarBottom < hmiBoxTop || railBarTop > hmiBoxBottom);
       const railIntersectsX = !(railX + usableW < hmiBoxLeft || railX > hmiBoxRight);
+      const isNearest = nearestRail !== null && nearestRail.index === rIdx + 1;
 
       if (railIntersectsY && railIntersectsX) {
         collidingRails.push({
           index: rIdx + 1,
           name: rail.name || `Calha DIN ${rIdx + 1}`,
           yMm: railY,
+          isNearest,
         });
       }
 
@@ -1413,6 +1636,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
         const compX = railX + item.positionMm;
         const compW = item.data.widthMm;
         const compH = item.data.heightMm || 90;
+        const compD = item.data.depthMm || 75;
         const compY = railY + 55 - compH / 2;
 
         const compLeft = compX;
@@ -1423,16 +1647,29 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
         const overlapsX = !(compRight < hmiBoxLeft || compLeft > hmiBoxRight);
         const overlapsY = !(compBottom < hmiBoxTop || compTop > hmiBoxBottom);
 
+        // 3D Depth Clearance calculation:
+        // Cabinet depth - (HMI intruding depth + DIN rail height + Component depth)
+        const totalInteriorOccupiedMm = railMountHeightMm + compD;
+        const clearanceMm = cabDepthMm - (hmiDepthWithConnectors + totalInteriorOccupiedMm);
+
         if (overlapsX && overlapsY) {
+          if (clearanceMm < minClearanceMm) {
+            minClearanceMm = clearanceMm;
+          }
           collidingComponents.push({
             instanceId: item.instanceId,
             tag: item.tag,
             name: item.data.name,
             railIndex: rIdx + 1,
+            isNearestRail: isNearest,
             xMm: compX,
             yMm: compY,
             widthMm: compW,
             heightMm: compH,
+            depthMm: compD,
+            clearanceMm,
+            overlapX: Math.round(Math.min(compRight, hmiBoxRight) - Math.max(compLeft, hmiBoxLeft)),
+            overlapY: Math.round(Math.min(compBottom, hmiBoxBottom) - Math.max(compTop, hmiBoxTop)),
           });
         }
       });
@@ -1440,17 +1677,80 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
 
     const hasClash = collidingComponents.length > 0 || collidingRails.length > 0;
 
+    // Calculate nearest safe Y coordinate to automatically avoid collision
+    let safeY: number | null = null;
+    if (hasClash || isOutsideGasket) {
+      const minSafeY = 45 + hmiBezelH / 2 + 5;
+      const maxSafeY = cabHeight - 45 - hmiBezelH / 2 - 5;
+      let bestCandidate: number | null = null;
+      let minDistance = Infinity;
+
+      for (let testY = minSafeY; testY <= maxSafeY; testY += 10) {
+        const testCutoutTop = testY - hmiCutoutH / 2 - 8;
+        const testCutoutBottom = testY + hmiCutoutH / 2 + 8;
+        let testHasClash = false;
+
+        for (let rIdx = 0; rIdx < rails.length; rIdx++) {
+          const rail = rails[rIdx];
+          const railY = 80 + rIdx * config.railSpacingMm;
+          const railBarTop = railY + 37.5;
+          const railBarBottom = railY + 72.5;
+          if (!(railBarBottom < testCutoutTop || railBarTop > testCutoutBottom)) {
+            testHasClash = true;
+            break;
+          }
+          for (const item of rail.items) {
+            const compH = item.data.heightMm || 90;
+            const compY = railY + 55 - compH / 2;
+            const compD = item.data.depthMm || 75;
+            const clearance = cabDepthMm - (hmiDepthWithConnectors + railMountHeightMm + compD);
+            if (clearance < 20) {
+              const compTop = compY - 4;
+              const compBottom = compY + compH + 4;
+              if (!(compBottom < testCutoutTop || compTop > testCutoutBottom)) {
+                testHasClash = true;
+                break;
+              }
+            }
+          }
+          if (testHasClash) break;
+        }
+
+        if (!testHasClash) {
+          const dist = Math.abs(testY - hmiY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            bestCandidate = testY;
+          }
+        }
+      }
+      safeY = bestCandidate;
+    }
+
     return {
       hasClash,
       collidingRails,
       collidingComponents,
+      nearestRail,
       isOutsideGasket,
       chassisDepthMm: hmiDepthMm,
+      cabDepthMm,
+      minClearanceMm,
+      safeY,
     };
   }, [
-    cutoutLeft, cutoutRight, cutoutTop, cutoutBottom,
-    rails, config.railSpacingMm, config.sideDuctWidthMm, cabWidth, hmiDepthMm, isOutsideGasket
+    cutoutLeft, cutoutRight, cutoutTop, cutoutBottom, hmiY, hmiBezelH, hmiCutoutH,
+    rails, config.railSpacingMm, config.sideDuctWidthMm, config.depthMm, cabWidth, cabHeight,
+    hmiDepthMm, isOutsideGasket
   ]);
+
+  const handleAutoAvoidClash = () => {
+    if (hmiMechanicalClash.safeY !== null) {
+      handleSyncHmiToDoorProject(hmiX, hmiMechanicalClash.safeY);
+      setRecentNotification(`🎯 HMI reposicionada automaticamente para Y=${Math.round(hmiMechanicalClash.safeY)}mm (Sem colisões).`);
+      setTimeout(() => setRecentNotification(null), 3500);
+    }
+  };
 
   // Synchronize HMI to project controlPanel state
   const handleSyncHmiToDoorProject = (newX?: number, newY?: number, modelSpec?: HmiPresetSpec) => {
@@ -1678,29 +1978,27 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               </div>
 
               {/* Toggles */}
-              <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+              <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5">
                 <button
                   type="button"
                   onClick={() => setShowWiring(!showWiring)}
-                  className={`h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition ${
+                  className={`h-7 w-7 flex items-center justify-center rounded transition ${
                     showWiring ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Mostrar fios e corrente"
+                  title={showWiring ? "Simulação de Fios e Corrente: ATIVADA (clique para ocultar)" : "Simulação de Fios e Corrente: DESATIVADA (clique para exibir)"}
                 >
-                  <Activity className="w-3 h-3" />
-                  <span>Fios</span>
+                  <Activity className="w-3.5 h-3.5" />
                 </button>
                 {showWiring && (
                   <button
                     type="button"
                     onClick={() => setShowWireTags(!showWireTags)}
-                    className={`h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition ${
+                    className={`h-7 w-7 flex items-center justify-center rounded transition ${
                       showWireTags ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400 hover:text-white'
                     }`}
-                    title="Anilhas de condutores"
+                    title={showWireTags ? "Anilhas de Fios e Bornes: VISÍVEIS (clique para ocultar)" : "Anilhas de Fios e Bornes: OCULTAS (clique para exibir)"}
                   >
-                    <Tag className="w-3 h-3 text-amber-400" />
-                    <span>Anilhas</span>
+                    <Tag className="w-3.5 h-3.5 text-amber-400" />
                   </button>
                 )}
                 <button
@@ -1716,15 +2014,14 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     );
                     setTimeout(() => setRecentNotification(null), 2500);
                   }}
-                  className={`h-7 px-2.5 rounded flex items-center gap-1.5 text-[11px] font-bold transition ${
+                  className={`h-7 w-7 flex items-center justify-center rounded transition ${
                     isWiringMode
                       ? 'bg-amber-500 text-slate-950 shadow-[0_0_10px_#f59e0b]'
                       : 'text-amber-300 hover:text-white bg-amber-950/50 border border-amber-600/40'
                   }`}
-                  title="Ligar condutores: clique num borne e arraste até ao destino"
+                  title={isWiringMode ? "Modo Cablagem Manual: ATIVADO (clique para desativar)" : "Modo Cablagem Manual: Ligar condutores borne a borne"}
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Ligar Fios</span>
                 </button>
                 {showWiring && (
                   <button
@@ -1739,14 +2036,15 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                       );
                       setTimeout(() => setRecentNotification(null), 2500);
                     }}
-                    className={`h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition ${
+                    className={`h-7 px-2 rounded flex items-center justify-center text-[11px] font-semibold transition ${
                       wireRouteStyle === 'direct'
                         ? 'bg-purple-600 text-white'
                         : 'text-slate-300 hover:text-white'
                     }`}
-                    title="Alternar entre roteamento ortogonal Manhattan (canaletas) e curvas diretas"
+                    title={wireRouteStyle === 'direct' ? "Roteamento Atual: Direto Ponto-a-Ponto (clique para Manhattan)" : "Roteamento Atual: Ortogonal Canaletas Manhattan (clique para Direto)"}
                   >
-                    <span>{wireRouteStyle === 'direct' ? 'Curvas Diretas' : 'Manhattan'}</span>
+                    <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
+                    <span>{wireRouteStyle === 'direct' ? 'Direto' : 'Manhattan'}</span>
                   </button>
                 )}
                 <button
@@ -1758,11 +2056,10 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                       setIsWiringListModalOpen(true);
                     }
                   }}
-                  className="h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition text-purple-300 hover:text-white bg-purple-950/50 border border-purple-600/40"
-                  title="Lista de Cablagem De-Para e exportar CSV"
+                  className="h-7 w-7 flex items-center justify-center rounded transition text-purple-300 hover:text-white bg-purple-950/50 border border-purple-600/40"
+                  title="Lista de Cablagem De-Para e exportação CSV"
                 >
                   <Table className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Cabos (CSV)</span>
                 </button>
                 <button
                   type="button"
@@ -1772,13 +2069,12 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     setRecentNotification(next ? 'Zonas Térmicas ON' : 'Zonas Térmicas OFF');
                     setTimeout(() => setRecentNotification(null), 1500);
                   }}
-                  className={`h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition ${
+                  className={`h-7 w-7 flex items-center justify-center rounded transition ${
                     showThermalZones ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Zonas Térmicas (EN 61439)"
+                  title={showThermalZones ? "Mapa de Zonas Térmicas: ATIVADO" : "Zonas Térmicas (Dissipação EN 61439)"}
                 >
-                  <Wind className="w-3 h-3 text-amber-400" />
-                  <span>Térmica</span>
+                  <Wind className="w-3.5 h-3.5 text-amber-400" />
                 </button>
                 <button
                   type="button"
@@ -1788,13 +2084,12 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     setRecentNotification(next ? 'Snap 5mm ON' : 'Snap OFF');
                     setTimeout(() => setRecentNotification(null), 1500);
                   }}
-                  className={`h-7 px-2 rounded flex items-center gap-1 text-[11px] font-semibold transition ${
+                  className={`h-7 w-7 flex items-center justify-center rounded transition ${
                     snapToGrid ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Alinhamento magnético com passo 5mm"
+                  title={snapToGrid ? "Snap Magnético 5mm: ATIVADO" : "Snap Magnético 5mm: DESATIVADO"}
                 >
-                  <Magnet className="w-3 h-3 text-amber-300" />
-                  <span>Snap</span>
+                  <Magnet className="w-3.5 h-3.5 text-amber-300" />
                 </button>
               </div>
 
@@ -1802,11 +2097,10 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               <button
                 type="button"
                 onClick={() => setIsAutoLayoutModalOpen(true)}
-                className="h-7 flex items-center gap-1 px-2.5 bg-blue-600/20 hover:bg-blue-600 border border-blue-500/40 text-blue-300 hover:text-white rounded-lg text-[11px] font-bold transition shadow-xs"
-                title="Otimização térmica e auto-layout"
+                className="h-7 w-7 flex items-center justify-center bg-blue-600/20 hover:bg-blue-600 border border-blue-500/40 text-blue-300 hover:text-white rounded-lg transition shadow-xs"
+                title="Auto-Layout Térmico: Otimização automática segundo norma EN 61439"
               >
-                <Sparkles className="w-3 h-3 text-blue-400" />
-                <span>Auto-Layout</span>
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
               </button>
 
               {/* Furação HMI Door Overlay Toggle in Immersive HUD */}
@@ -1818,15 +2112,14 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                   setRecentNotification(next ? '🚪 Sobreposição da Porta & Recorte HMI ATIVADA' : 'Sobreposição HMI desativada');
                   setTimeout(() => setRecentNotification(null), 2000);
                 }}
-                className={`h-7 px-2.5 rounded-lg flex items-center gap-1.5 text-[11px] font-bold transition shadow-xs ${
+                className={`h-7 w-7 flex items-center justify-center rounded-lg transition shadow-xs ${
                   showHmiDoorOverlay
                     ? 'bg-purple-600 text-white shadow-purple-500/30 ring-1 ring-purple-300'
                     : 'bg-purple-950/60 hover:bg-purple-900 border border-purple-500/50 text-purple-300 hover:text-white'
                 }`}
-                title="Sobreposição gráfica da porta e furação da HMI com cotas e colisão mecânica"
+                title={showHmiDoorOverlay ? "Furação HMI na Porta: ATIVADA (clique para ocultar)" : "Furação HMI na Porta: DESATIVADA (clique para sobrepor)"}
               >
-                <DoorClosed className="w-3 h-3 text-purple-300" />
-                <span>{showHmiDoorOverlay ? 'HMI Porta: ON' : 'HMI Porta'}</span>
+                <DoorClosed className="w-3.5 h-3.5 text-purple-300" />
               </button>
 
               <div className="h-4 w-px bg-slate-800"></div>
@@ -1835,15 +2128,14 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               <button
                 type="button"
                 onClick={() => setIsFloatingDrawerOpen((prev) => !prev)}
-                className={`h-7 flex items-center gap-1.5 px-3 rounded-lg text-[11px] font-bold transition shadow-xs active:scale-95 ${
+                className={`h-7 w-7 flex items-center justify-center rounded-lg transition shadow-xs active:scale-95 ${
                   isFloatingDrawerOpen
                     ? 'bg-purple-600 text-white shadow-purple-500/30 ring-1 ring-purple-400'
                     : 'bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/50'
                 }`}
-                title="Abrir ou ocultar a Paleta Flutuante de Ferramentas e Componentes"
+                title={isFloatingDrawerOpen ? "Fechar Paleta Flutuante de Ferramentas" : "Abrir Paleta Flutuante de Ferramentas"}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>{isFloatingDrawerOpen ? 'Fechar Paleta' : 'Paleta Flutuante'}</span>
               </button>
 
               {/* Gravar (Ctrl+S) */}
@@ -1851,11 +2143,10 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 <button
                   type="button"
                   onClick={onQuickSave}
-                  className="h-7 flex items-center gap-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition shadow-xs active:scale-95"
-                  title="Gravar Projeto Imediatamente (Ctrl+S)"
+                  className="h-7 w-7 flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-xs active:scale-95"
+                  title="Gravar Projeto Imediatamente (Atalho: Ctrl+S)"
                 >
-                  <Save className="w-3 h-3" />
-                  <span>Gravar</span>
+                  <Save className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -1883,16 +2174,15 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
           </div>
 
           {/* Quick Canvas Action: Layout & Porta HMI Tool Cluster */}
-          <div className="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-1.5 pointer-events-auto">
+          <div className="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-1 pointer-events-auto bg-slate-950/85 backdrop-blur-xs p-1 rounded-lg border border-slate-800 shadow-md">
             {onOpenControlPanel && (
               <button
                 type="button"
                 onClick={onOpenControlPanel}
-                className="h-7.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition shadow-md bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 hover:text-white"
-                title="Abrir editor completo da porta: Ecrã HMI, botões 22mm e mapa de furação"
+                className="h-7.5 w-8 flex items-center justify-center rounded-md transition shadow-xs bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 hover:text-white"
+                title="Editor da Porta: Painel frontal, ecrãs HMI, botões 22mm e furação CNC"
               >
-                <Layout className="w-3.5 h-3.5 text-purple-400" />
-                <span>Porta & HMI</span>
+                <Layout className="w-4 h-4 text-purple-400" />
               </button>
             )}
 
@@ -1908,16 +2198,26 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 );
                 setTimeout(() => setRecentNotification(null), 2000);
               }}
-              className={`h-7.5 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition shadow-md ${
+              className={`h-7.5 w-8 flex items-center justify-center rounded-md transition shadow-xs ${
                 showHmiDoorOverlay
                   ? 'bg-purple-600 text-white shadow-purple-500/30 ring-1 ring-purple-300'
-                  : 'bg-slate-950/90 hover:bg-slate-850 border border-purple-500/40 text-purple-300 hover:text-white'
+                  : 'bg-slate-900 hover:bg-slate-800 border border-purple-500/40 text-purple-300 hover:text-white'
               }`}
-              title="Exibir ou ocultar sobreposição da porta e cotas de furação da HMI"
+              title={showHmiDoorOverlay ? "Furação HMI na Porta: ATIVADA (clique para ocultar)" : "Furação HMI na Porta: DESATIVADA (clique para sobrepor)"}
             >
-              <DoorClosed className="w-3.5 h-3.5" />
-              <span>{showHmiDoorOverlay ? 'Furação HMI (ON)' : 'Furação HMI'}</span>
+              <DoorClosed className="w-4 h-4 text-purple-400" />
             </button>
+
+            {onOpenDrillingTemplate && (
+              <button
+                type="button"
+                onClick={onOpenDrillingTemplate}
+                className="h-7.5 w-8 flex items-center justify-center rounded-md transition shadow-xs bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-amber-300 hover:text-white"
+                title="Imprimir Gabarito / Template de Furações com Medidas para as Margens (A4 / A3 / SVG)"
+              >
+                <Ruler className="w-4 h-4 text-amber-400" />
+              </button>
+            )}
           </div>
 
           {/* Live Mini Simulation Testing Dock at Bottom of Canvas (when showWiring is enabled) */}
@@ -2011,7 +2311,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               </button>
 
               {/* Reset Custom Wiring button if user modified wiring */}
-              {project.wires && project.wires.length > 0 && (
+              {project.wires !== undefined && (
                 <button
                   type="button"
                   onClick={handleResetWiresToDefault}
@@ -2020,6 +2320,23 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 >
                   <RotateCcw className="w-3 h-3 text-sky-400" />
                   <span>Repor Padrão ({project.wires.length})</span>
+                </button>
+              )}
+
+              {/* Clear All Wires Button */}
+              {baseWires.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Tem a certeza que deseja remover todas as ligações deste quadro elétrico?')) {
+                      handleClearAllWires();
+                    }
+                  }}
+                  className="px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 transition"
+                  title="Limpar e apagar todas as ligações do quadro"
+                >
+                  <Trash2 className="w-3 h-3 text-red-400" />
+                  <span>Limpar Ligações</span>
                 </button>
               )}
 
@@ -2034,6 +2351,35 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                   {updatedState.relayStates['K1'] ? 'RELÉ K1: FECHADO' : 'RELÉ K1: ABERTO'}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Floating Real-Time Warning Banner when Rails are Over Capacity */}
+          {overfilledRails.length > 0 && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 max-w-2xl w-auto bg-red-950/95 border-2 border-red-500 text-red-100 px-4 py-2 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-3">
+              <div className="p-1.5 bg-red-900/80 rounded-lg text-red-300 border border-red-500/50 animate-pulse">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="text-xs leading-snug">
+                <div className="font-bold text-white flex items-center gap-1.5">
+                  <span>Validação Visual: Largura Útil da Calha Excedida</span>
+                  <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-mono text-[10px]">
+                    {overfilledRails.length} {overfilledRails.length === 1 ? 'Calha' : 'Calhas'}
+                  </span>
+                </div>
+                <p className="text-red-200 text-[11px] mt-0.5">
+                  {overfilledRails.map((r) => `${r.name}: ${r.sumW}mm ocupados / ${r.usableW}mm úteis (+${r.excess}mm)`).join(' · ')}. A calha afetada está destacada a <strong className="text-red-300 underline">vermelho</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSideTab('enclosure_size')}
+                className="shrink-0 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+                title="Ajustar largura ou calhas do armário"
+              >
+                <span>Ajustar Quadro</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           )}
 
@@ -2062,6 +2408,11 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 maxWidth: 'none',
               }}
             >
+            <defs>
+              <pattern id="hmiClashHazard" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="12" stroke="#ef4444" strokeWidth="4" opacity="0.65" />
+              </pattern>
+            </defs>
             {/* Cabinet Outer Enclosure Metallic Frame */}
             <rect
               x="0"
@@ -2399,8 +2750,12 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               const railX = 24 + sideDuct + 10;
               const railY = 80 + rIdx * config.railSpacingMm;
               const railWidth = usableWidth;
+              const railEffectiveUsableWidth = rail.usableWidthMm || usableWidth;
+              const sumComponentsWidthMm = rail.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0);
               const usedWidth = rail.items.reduce((acc, it) => acc + it.data.widthMm + 5, 0);
-              const isOverfull = usedWidth > railWidth;
+              const isOverCapacity = sumComponentsWidthMm > railEffectiveUsableWidth;
+              const excessWidthMm = Math.max(0, sumComponentsWidthMm - railEffectiveUsableWidth);
+              const isOverfull = isOverCapacity || usedWidth > railWidth;
               const isSelectedRail = selectedRailIndex === rIdx;
 
               return (
@@ -2475,7 +2830,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                         width={railWidth + 6}
                         height="26"
                         fill="none"
-                        stroke="#38bdf8"
+                        stroke={isOverCapacity ? "#ef4444" : "#38bdf8"}
                         strokeWidth="2"
                         strokeDasharray="6 3"
                         rx="3"
@@ -2483,17 +2838,41 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                       />
                     )}
 
-                    {/* DIN Rail 35mm Metallic Steel Bar */}
+                    {/* Pulsing Red Warning Halo behind DIN Rail if over capacity */}
+                    {isOverCapacity && (
+                      <rect
+                        x="-4"
+                        y="41"
+                        width={railWidth + 8}
+                        height="28"
+                        fill="rgba(239, 68, 68, 0.25)"
+                        stroke="#ef4444"
+                        strokeWidth="2"
+                        strokeDasharray="6 3"
+                        rx="3"
+                        className="animate-pulse pointer-events-none"
+                      />
+                    )}
+
+                    {/* DIN Rail 35mm Metallic Steel Bar - Turns Red when Over Capacity */}
                     <rect
                       x="0"
                       y="45"
                       width={railWidth}
                       height="20"
-                      fill={isSelectedRail ? "#475569" : "#64748b"}
-                      stroke={isSelectedRail ? "#38bdf8" : "#94a3b8"}
-                      strokeWidth={isSelectedRail ? "2" : "1.5"}
+                      fill={
+                        isOverCapacity
+                          ? isSelectedRail
+                            ? '#b91c1c'
+                            : '#dc2626'
+                          : isSelectedRail
+                          ? '#475569'
+                          : '#64748b'
+                      }
+                      stroke={isOverCapacity ? '#ef4444' : isSelectedRail ? '#38bdf8' : '#94a3b8'}
+                      strokeWidth={isOverCapacity ? (isSelectedRail ? '2.5' : '2') : isSelectedRail ? '2' : '1.5'}
                       rx="1"
-                      className="group-hover:stroke-sky-400 group-hover:fill-slate-600 transition"
+                      className={isOverCapacity ? 'transition drop-shadow-md' : 'group-hover:stroke-sky-400 group-hover:fill-slate-600 transition'}
                     />
                     {/* DIN Rail perforations */}
                     {Array.from({ length: Math.floor(railWidth / 25) }).map((_, i) => (
@@ -2503,11 +2882,41 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                         y="51"
                         width="12"
                         height="8"
-                        fill="#334155"
+                        fill={isOverCapacity ? '#7f1d1d' : '#334155'}
                         rx="2"
                       />
                     ))}
-                    <title>{`Calha DIN ${rIdx + 1} (${rail.name}) — Clique para selecionar e ver botão de inserir componente`}</title>
+                    {/* Warning badge directly on rail when capacity exceeded */}
+                    {isOverCapacity && (
+                      <g transform={`translate(${railWidth - 125}, 28)`} className="pointer-events-none">
+                        <rect
+                          x="0"
+                          y="0"
+                          width="125"
+                          height="18"
+                          fill="#b91c1c"
+                          stroke="#fca5a5"
+                          strokeWidth="1"
+                          rx="3"
+                          className="drop-shadow-md animate-pulse"
+                        />
+                        <text
+                          x="62.5"
+                          y="12.5"
+                          fill="#ffffff"
+                          fontSize="7.5"
+                          fontWeight="bold"
+                          fontFamily="JetBrains Mono"
+                          textAnchor="middle"
+                        >
+                          ⚠️ SOBRECARGA +{Math.round(excessWidthMm)}mm
+                        </text>
+                      </g>
+                    )}
+                    <title>{isOverCapacity 
+                      ? `⚠️ SOBRECARGA: Calha DIN ${rIdx + 1} (${rail.name}) tem ${Math.round(sumComponentsWidthMm)}mm de componentes para ${railEffectiveUsableWidth}mm úteis (excesso de ${Math.round(excessWidthMm)}mm)!` 
+                      : `Calha DIN ${rIdx + 1} (${rail.name}) — Clique para selecionar e ver botão de inserir componente`
+                    }</title>
                   </g>
 
                   {/* Placed Components on this DIN Rail (Real-time collision-free layout) */}
@@ -2676,10 +3085,34 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                           );
                         })()}
 
-                        {/* =====================================
-                            1. MEAN WELL POWER SUPPLY RENDERING
-                           ===================================== */}
-                        {item.data.category === 'power_supply' ? (
+                        {/* ========================================================
+                            0. CUSTOM SVG VECTOR GRAPHIC (FICHEIRO .SVG IMPORTADO)
+                           ======================================================== */}
+                        {item.data.customSvg ? (
+                          <g className="custom-svg-component-graphic">
+                            {/* Background container plate */}
+                            <rect
+                              x="0"
+                              y="0"
+                              width={compW}
+                              height={compH}
+                              fill="#090d16"
+                              stroke={isSelected ? '#38bdf8' : '#334155'}
+                              strokeWidth={isSelected ? '2' : '1'}
+                              rx="3"
+                            />
+                            {/* Scaled SVG Graphic */}
+                            <image
+                              href={svgToDataUri(item.data.customSvg)}
+                              x="0"
+                              y="0"
+                              width={compW}
+                              height={compH}
+                              preserveAspectRatio={item.data.svgAspectMode === 'stretch' ? 'none' : 'xMidYMid meet'}
+                              className="pointer-events-none"
+                            />
+                          </g>
+                        ) : item.data.category === 'power_supply' ? (
                           <g>
                             {/* Body casing (Deep Blue / Metal) */}
                             <rect
@@ -3217,8 +3650,69 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                               </g>
                             )}
                           </g>
+                        ) : item.data.category === 'motor_control' ? (
+                          /* Industrial Contactor & Motor Starter Graphic */
+                          <g>
+                            <rect
+                              x="0"
+                              y="0"
+                              width={compW}
+                              height={compH}
+                              fill="#1e293b"
+                              stroke="#475569"
+                              strokeWidth="1.5"
+                              rx="3"
+                            />
+                            {/* Top terminal block (1/L1, 3/L2, 5/L3, A1) */}
+                            <rect x="2" y="2" width={compW - 4} height="14" fill="#0f172a" rx="1.5" />
+                            <circle cx={compW * 0.2} cy="9" r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.4} cy="9" r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.6} cy="9" r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.82} cy="9" r="2" fill="#f59e0b" />
+                            {/* Central frontplate */}
+                            <rect x="3" y="19" width={compW - 6} height={Math.max(20, compH - 38)} fill="#0f172a" rx="2" stroke="#334155" strokeWidth="1" />
+                            <text
+                              x={compW / 2}
+                              y="31"
+                              fill="#38bdf8"
+                              fontSize="6"
+                              fontWeight="bold"
+                              fontFamily="JetBrains Mono"
+                              textAnchor="middle"
+                            >
+                              {item.data.brand || 'CONTACTOR'}
+                            </text>
+                            <text
+                              x={compW / 2}
+                              y="41"
+                              fill="#ffffff"
+                              fontSize="6.5"
+                              fontWeight="bold"
+                              fontFamily="JetBrains Mono"
+                              textAnchor="middle"
+                            >
+                              {truncateText(item.data.partNumber, Math.floor((compW - 6) / 4.2))}
+                            </text>
+                            {item.data.ratedCurrentA && (
+                              <text
+                                x={compW / 2}
+                                y="50"
+                                fill="#22c55e"
+                                fontSize="5.5"
+                                fontFamily="sans-serif"
+                                textAnchor="middle"
+                              >
+                                {item.data.ratedCurrentA}A · AC-3
+                              </text>
+                            )}
+                            {/* Bottom terminal block (2/T1, 4/T2, 6/T3, A2) */}
+                            <rect x="2" y={compH - 16} width={compW - 4} height="14" fill="#0f172a" rx="1.5" />
+                            <circle cx={compW * 0.2} cy={compH - 9} r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.4} cy={compH - 9} r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.6} cy={compH - 9} r="2.5" fill="#64748b" stroke="#cbd5e1" strokeWidth="0.5" />
+                            <circle cx={compW * 0.82} cy={compH - 9} r="2" fill="#f59e0b" />
+                          </g>
                         ) : (
-                          /* Other components (Contactors, Sockets, etc.) */
                           <g>
                             <rect
                               x="0"
@@ -3466,83 +3960,62 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     });
                   })()}
 
-                  {/* Action Card: Inserir Componente (Appears ONLY when this DIN Rail is clicked / selected) */}
+                  {/* Compact Icon Button: Adicionar Componente (Appears when DIN Rail is selected) */}
                   {isSelectedRail && (
                     <g
-                      transform={`translate(${Math.min(Math.max(10, railWidth - 175), Math.max(10, usedWidth + 12))}, 18)`}
+                      transform={`translate(${Math.min(railWidth - 28, Math.max(10, usedWidth + 10))}, 18)`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onOpenCatalog(rIdx);
                       }}
                       className="cursor-pointer group"
                     >
-                      {/* High-contrast solid container over the DIN rail */}
-                      <rect
-                        x="0"
-                        y="0"
-                        width="170"
-                        height="74"
-                        fill="#090d16"
-                        stroke="#38bdf8"
-                        strokeWidth="2"
-                        rx="8"
-                        className="group-hover:fill-sky-950/90 group-hover:stroke-sky-300 drop-shadow-xl transition"
+                      <title>{`Adicionar componente à Calha ${rIdx + 1}${
+                        isOverCapacity
+                          ? ` (⚠️ Excesso de ${Math.round(excessWidthMm)}mm!)`
+                          : railEffectiveUsableWidth - sumComponentsWidthMm > 0
+                          ? ` (${Math.max(0, Math.round(railEffectiveUsableWidth - sumComponentsWidthMm))}mm livres)`
+                          : ' (Capacidade máxima atingida)'
+                      }`}</title>
+                      {/* Pulse halo if rail has space */}
+                      <circle
+                        cx="13"
+                        cy="13"
+                        r="14"
+                        fill="none"
+                        stroke={isOverCapacity ? '#ef4444' : '#38bdf8'}
+                        strokeWidth="1.5"
+                        strokeDasharray="3 3"
+                        className="animate-spin"
+                        style={{ transformOrigin: '13px 13px', animationDuration: '6s' }}
                       />
-                      {/* Main action pill button */}
-                      <rect
-                        x="10"
-                        y="10"
-                        width="150"
-                        height="32"
-                        fill="#0284c7"
-                        rx="6"
-                        className="group-hover:fill-sky-500 transition"
+                      <circle
+                        cx="13"
+                        cy="13"
+                        r="12"
+                        fill={isOverCapacity ? '#dc2626' : '#0284c7'}
+                        stroke={isOverCapacity ? '#fca5a5' : '#38bdf8'}
+                        strokeWidth="1.5"
+                        className="group-hover:fill-sky-500 group-hover:scale-110 transition-transform shadow-md"
                       />
-                      <circle cx="28" cy="26" r="8" fill="#0369a1" />
-                      <text
-                        x="28"
-                        y="30"
-                        fill="#ffffff"
-                        fontSize="14"
-                        fontWeight="bold"
-                        textAnchor="middle"
-                      >
-                        +
-                      </text>
-                      <text
-                        x="88"
-                        y="30"
-                        fill="#ffffff"
-                        fontSize="10.5"
-                        fontWeight="bold"
-                        fontFamily="Plus Jakarta Sans"
-                        textAnchor="middle"
-                      >
-                        Inserir Componente
-                      </text>
-                      {/* Remaining capacity info */}
-                      <text
-                        x="85"
-                        y="55"
-                        fill={isOverfull ? '#f87171' : '#94a3b8'}
-                        fontSize="8.5"
-                        fontFamily="JetBrains Mono"
-                        textAnchor="middle"
-                      >
-                        {railWidth - usedWidth > 0
-                          ? `Restam ${Math.max(0, Math.round(railWidth - usedWidth))}mm livres`
-                          : 'Capacidade máxima atingida'}
-                      </text>
-                      <text
-                        x="85"
-                        y="66"
-                        fill="#38bdf8"
-                        fontSize="7.5"
-                        fontFamily="Plus Jakarta Sans"
-                        textAnchor="middle"
-                      >
-                        Clique para abrir o catálogo
-                      </text>
+                      <line
+                        x1="13"
+                        y1="7"
+                        x2="13"
+                        y2="19"
+                        stroke="#ffffff"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="7"
+                        y1="13"
+                        x2="19"
+                        y2="13"
+                        stroke="#ffffff"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                      />
                     </g>
                   )}
 
@@ -3554,25 +4027,50 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                       y="-12"
                       width={railWidth + 8}
                       height="24"
-                      fill="#090d16"
-                      stroke={isSelectedRail ? "#38bdf8" : "#334155"}
-                      strokeWidth={isSelectedRail ? "1.5" : "1"}
+                      fill={isOverCapacity ? '#2d0606' : '#090d16'}
+                      stroke={isOverCapacity ? '#ef4444' : isSelectedRail ? '#38bdf8' : '#334155'}
+                      strokeWidth={isOverCapacity ? '2' : isSelectedRail ? '1.5' : '1'}
                       rx="4"
                       className="drop-shadow-md"
                     />
                     <text
                       x="8"
                       y="4"
-                      fill="#f8fafc"
+                      fill={isOverCapacity ? '#fca5a5' : '#f8fafc'}
                       fontSize="11"
                       fontWeight="bold"
                       fontFamily="Plus Jakarta Sans"
                     >
-                      {rail.name} <tspan fill="#38bdf8" fontSize="9">· Calha DIN 35mm</tspan>
+                      {rail.name} <tspan fill={isOverCapacity ? '#f87171' : '#38bdf8'} fontSize="9">· Calha DIN 35mm</tspan>
                     </text>
 
-                    {/* Selection status or click hint */}
-                    {isSelectedRail ? (
+                    {/* Warning pill when rail exceeds usable width */}
+                    {isOverCapacity ? (
+                      <g transform={`translate(${Math.max(160, Math.min(railWidth - 230, isSelectedRail ? 295 : 175))}, -9)`}>
+                        <rect
+                          x="0"
+                          y="0"
+                          width="215"
+                          height="18"
+                          fill="#dc2626"
+                          stroke="#fecaca"
+                          strokeWidth="1"
+                          rx="3"
+                          className="drop-shadow-md animate-pulse"
+                        />
+                        <text
+                          x="107.5"
+                          y="12.5"
+                          fill="#ffffff"
+                          fontSize="8"
+                          fontWeight="bold"
+                          fontFamily="JetBrains Mono"
+                          textAnchor="middle"
+                        >
+                          ⚠️ SOBRECARGA: +{Math.round(excessWidthMm)}mm EXCEDIDOS
+                        </text>
+                      </g>
+                    ) : isSelectedRail ? (
                       <g transform="translate(160, -9)">
                         <rect
                           x="0"
@@ -3622,11 +4120,11 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                           y="0"
                           width="125"
                           height="18"
-                          fill="#0369a1"
-                          stroke="#38bdf8"
+                          fill={isOverCapacity ? '#991b1b' : '#0369a1'}
+                          stroke={isOverCapacity ? '#ef4444' : '#38bdf8'}
                           strokeWidth="1"
                           rx="3"
-                          className="group-hover:fill-sky-600 transition shadow-xs"
+                          className={isOverCapacity ? 'hover:fill-red-700 transition shadow-xs' : 'group-hover:fill-sky-600 transition shadow-xs'}
                         />
                         <text
                           x="62.5"
@@ -3646,13 +4144,14 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     <text
                       x={railWidth}
                       y="3"
-                      fill={isOverfull ? '#ef4444' : '#94a3b8'}
+                      fill={isOverCapacity ? '#ef4444' : isOverfull ? '#f59e0b' : '#94a3b8'}
                       fontSize="9.5"
                       fontFamily="JetBrains Mono"
                       textAnchor="end"
                       className="font-bold"
                     >
-                      {Math.round(usedWidth)}mm / {railWidth}mm ({Math.round((usedWidth / railWidth) * 100)}%)
+                      {isOverCapacity ? '⚠️ ' : ''}
+                      {Math.round(sumComponentsWidthMm)}mm / {railEffectiveUsableWidth}mm ({railEffectiveUsableWidth > 0 ? Math.round((sumComponentsWidthMm / railEffectiveUsableWidth) * 100) : 0}%)
                     </text>
                   </g>
                 </g>
@@ -4473,7 +4972,55 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     : 'Margem de Segurança da Borracha de Vedação da Porta (45mm)'}
                 </text>
 
-                {/* 2. Highlight Interior Components in Collision Behind HMI */}
+                {/* 2. Nearest DIN Rail Visual Indicator & Distance to HMI */}
+                {hmiMechanicalClash.nearestRail && (
+                  <g className="nearest-rail-indicator" pointerEvents="none">
+                    {/* Horizontal reference dashed guide line through the nearest rail center */}
+                    <line
+                      x1="24"
+                      y1={hmiMechanicalClash.nearestRail.centerRailY}
+                      x2={cabWidth - 24}
+                      y2={hmiMechanicalClash.nearestRail.centerRailY}
+                      stroke={hmiMechanicalClash.hasClash ? '#f59e0b' : '#38bdf8'}
+                      strokeWidth="1.2"
+                      strokeDasharray="4 4"
+                      opacity="0.85"
+                    />
+                    {/* Distance Dimension Line between HMI Center and Nearest Rail Center */}
+                    <line
+                      x1={cutoutRight + 25}
+                      y1={hmiY}
+                      x2={cutoutRight + 25}
+                      y2={hmiMechanicalClash.nearestRail.centerRailY}
+                      stroke={hmiMechanicalClash.hasClash ? '#ef4444' : '#f59e0b'}
+                      strokeWidth="1.5"
+                    />
+                    <circle cx={cutoutRight + 25} cy={hmiY} r="2.5" fill={hmiMechanicalClash.hasClash ? '#ef4444' : '#f59e0b'} />
+                    <circle cx={cutoutRight + 25} cy={hmiMechanicalClash.nearestRail.centerRailY} r="2.5" fill={hmiMechanicalClash.hasClash ? '#ef4444' : '#f59e0b'} />
+                    <rect
+                      x={cutoutRight + 30}
+                      y={(hmiY + hmiMechanicalClash.nearestRail.centerRailY) / 2 - 9}
+                      width="155"
+                      height="18"
+                      rx="3"
+                      fill="#0f172a"
+                      stroke={hmiMechanicalClash.hasClash ? '#ef4444' : '#f59e0b'}
+                      strokeWidth="0.9"
+                    />
+                    <text
+                      x={cutoutRight + 34}
+                      y={(hmiY + hmiMechanicalClash.nearestRail.centerRailY) / 2 + 3.5}
+                      fill={hmiMechanicalClash.hasClash ? '#fca5a5' : '#fde68a'}
+                      fontSize="7.5"
+                      fontWeight="bold"
+                      fontFamily="JetBrains Mono"
+                    >
+                      ↕ ΔY {hmiMechanicalClash.nearestRail.name}: {Math.round(hmiMechanicalClash.nearestRail.distY)}mm
+                    </text>
+                  </g>
+                )}
+
+                {/* 2b. Highlight Interior Components in Collision Behind HMI */}
                 {hmiMechanicalClash.hasClash && (
                   <g className="collision-highlights" pointerEvents="none">
                     {/* Colliding DIN Rails warning banner */}
@@ -4484,27 +5031,36 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                           y={rail.yMm + 37.5}
                           width={cabWidth - 48}
                           height="35"
-                          fill="#dc2626"
-                          fillOpacity="0.18"
+                          fill="url(#hmiClashHazard)"
                           stroke="#ef4444"
                           strokeWidth="1.5"
                           strokeDasharray="4 2"
                         />
+                        <rect
+                          x={cabWidth - 210}
+                          y={rail.yMm + 44}
+                          width="185"
+                          height="20"
+                          rx="3"
+                          fill="#7f1d1d"
+                          stroke="#ef4444"
+                          strokeWidth="0.8"
+                        />
                         <text
-                          x={cabWidth - 36}
-                          y={rail.yMm + 58}
-                          fill="#f87171"
+                          x={cabWidth - 117}
+                          y={rail.yMm + 57}
+                          fill="#fee2e2"
                           fontSize="7.5"
                           fontWeight="bold"
                           fontFamily="JetBrains Mono"
-                          textAnchor="end"
+                          textAnchor="middle"
                         >
-                          ⚠️ CONFLITO MECÂNICO: {rail.name}
+                          ⚠️ CONFLITO COM {rail.name.toUpperCase()}
                         </text>
                       </g>
                     ))}
 
-                    {/* Colliding components red bounding halos */}
+                    {/* Colliding components red bounding halos with hazard stripes & clearances */}
                     {hmiMechanicalClash.collidingComponents.map((comp) => (
                       <g key={`clash-comp-${comp.instanceId}`}>
                         <rect
@@ -4512,32 +5068,30 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                           y={comp.yMm - 2}
                           width={comp.widthMm + 4}
                           height={comp.heightMm + 4}
-                          fill="#ef4444"
-                          fillOpacity="0.25"
+                          fill="url(#hmiClashHazard)"
                           stroke="#ef4444"
                           strokeWidth="2"
-                          strokeDasharray="4 2"
                           rx="3"
                         />
                         <rect
                           x={comp.xMm}
-                          y={comp.yMm - 14}
-                          width={Math.max(90, comp.widthMm)}
-                          height="12"
-                          fill="#7f1d1d"
+                          y={comp.yMm - 16}
+                          width={Math.max(150, comp.widthMm)}
+                          height="14"
+                          fill="#450a0a"
                           stroke="#ef4444"
                           strokeWidth="0.8"
                           rx="2"
                         />
                         <text
                           x={comp.xMm + 4}
-                          y={comp.yMm - 5}
+                          y={comp.yMm - 6}
                           fill="#fecaca"
-                          fontSize="7"
+                          fontSize="6.8"
                           fontWeight="bold"
                           fontFamily="JetBrains Mono"
                         >
-                          ⚡ COLISÃO: {comp.tag}
+                          ⚠️ {comp.tag} ({comp.heightMm}×{comp.depthMm}mm) Folga: {comp.clearanceMm}mm
                         </text>
                       </g>
                     ))}
@@ -4820,16 +5374,16 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                   {/* Real-time Status Halo Badge */}
                   {hmiMechanicalClash.hasClash ? (
                     <g transform={`translate(0, ${hmiBezelH / 2 + 15})`}>
-                      <rect x="-95" y="-9" width="190" height="18" rx="4" fill="#7f1d1d" stroke="#ef4444" strokeWidth="1.2" />
-                      <text x="0" y="3" fill="#fee2e2" fontSize="7.5" fontWeight="bold" fontFamily="Plus Jakarta Sans" textAnchor="middle">
-                        ⚠️ COLISÃO MECÂNICA (~{hmiDepthMm}mm prof.)
+                      <rect x="-135" y="-9" width="270" height="20" rx="4" fill="#7f1d1d" stroke="#ef4444" strokeWidth="1.2" />
+                      <text x="0" y="4" fill="#fee2e2" fontSize="7.5" fontWeight="bold" fontFamily="Plus Jakarta Sans" textAnchor="middle">
+                        ⚠️ COLISÃO DETETADA ({hmiMechanicalClash.nearestRail ? hmiMechanicalClash.nearestRail.name : 'Interior'} · Folga: {hmiMechanicalClash.minClearanceMm}mm)
                       </text>
                     </g>
                   ) : (
                     <g transform={`translate(0, ${hmiBezelH / 2 + 15})`}>
-                      <rect x="-75" y="-9" width="150" height="18" rx="4" fill="#064e3b" stroke="#10b981" strokeWidth="1.2" />
-                      <text x="0" y="3" fill="#d1fae5" fontSize="7.5" fontWeight="bold" fontFamily="Plus Jakarta Sans" textAnchor="middle">
-                        ✓ LIVRE DE COLISÃO INTERIOR
+                      <rect x="-95" y="-9" width="190" height="18" rx="4" fill="#064e3b" stroke="#10b981" strokeWidth="1.2" />
+                      <text x="0" y="3.5" fill="#d1fae5" fontSize="7.5" fontWeight="bold" fontFamily="Plus Jakarta Sans" textAnchor="middle">
+                        ✓ LIVRE DE COLISÃO ({hmiMechanicalClash.minClearanceMm}mm livres)
                       </text>
                     </g>
                   )}
@@ -5069,18 +5623,46 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     {/* Mechanical Collision & Safety Diagnostics */}
                     <div className="space-y-1.5">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Diagnóstico de Montagem Traseira (~{hmiDepthMm}mm)
+                        Diagnóstico Mecânico 3D (Quadro: {hmiMechanicalClash.cabDepthMm}mm · HMI: {hmiDepthMm}mm)
+                      </div>
+
+                      {/* Nearest DIN rail indicator */}
+                      {hmiMechanicalClash.nearestRail && (
+                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-[11px] flex items-center justify-between">
+                          <span className="text-slate-400">Calha DIN mais próxima:</span>
+                          <span className="font-mono font-bold text-sky-400">
+                            {hmiMechanicalClash.nearestRail.name} (ΔY {Math.round(hmiMechanicalClash.nearestRail.distY)}mm)
+                          </span>
+                        </div>
+                      )}
+
+                      {/* 3D Depth Clearance breakdown */}
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-[10px] space-y-1 font-mono">
+                        <div className="flex justify-between text-slate-400">
+                          <span>Profundidade Quadro:</span>
+                          <span className="text-slate-200">{hmiMechanicalClash.cabDepthMm} mm</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span>HMI + Conexões Traseiras:</span>
+                          <span className="text-slate-200">~{hmiDepthMm + 15} mm</span>
+                        </div>
+                        <div className="flex justify-between font-bold pt-1 border-t border-slate-800/60">
+                          <span className="text-slate-300">Folga Livre Traseira:</span>
+                          <span className={hmiMechanicalClash.minClearanceMm < 20 ? 'text-red-400' : 'text-emerald-400'}>
+                            {hmiMechanicalClash.minClearanceMm} mm {hmiMechanicalClash.minClearanceMm < 20 ? '(Insuficiente)' : '(Segura)'}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Clash Alert Box */}
                       {hmiMechanicalClash.hasClash ? (
-                        <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-500/60 text-red-200 space-y-1.5">
+                        <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-500/60 text-red-200 space-y-2">
                           <div className="flex items-center gap-1.5 font-bold text-red-300 text-xs">
                             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
                             <span>Interferência Mecânica Detetada!</span>
                           </div>
                           <p className="text-[11px] text-red-200/90 leading-relaxed">
-                            O corpo traseiro da HMI (~{hmiDepthMm}mm de profundidade) colide com equipamentos montados na placa de montagem interior:
+                            A furação/chassi da HMI colide com a {hmiMechanicalClash.nearestRail ? hmiMechanicalClash.nearestRail.name : 'calha interior'} ou componentes montados:
                           </p>
                           <ul className="text-[10px] font-mono text-red-300 list-disc list-inside space-y-0.5">
                             {hmiMechanicalClash.collidingRails.map((r) => (
@@ -5088,13 +5670,21 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                             ))}
                             {hmiMechanicalClash.collidingComponents.map((c) => (
                               <li key={`info-c-${c.instanceId}`}>
-                                {c.tag}: {c.name}
+                                {c.tag}: {c.name} (Alt: {c.heightMm}mm, Prof: {c.depthMm}mm, Folga: {c.clearanceMm}mm)
                               </li>
                             ))}
                           </ul>
-                          <p className="text-[10px] text-amber-300 font-semibold mt-1">
-                            💡 Sugestão: Desloque a HMI na porta ou mova os componentes para calhas inferiores para a porta conseguir fechar.
-                          </p>
+                          {hmiMechanicalClash.safeY !== null && (
+                            <button
+                              type="button"
+                              onClick={handleAutoAvoidClash}
+                              className="w-full mt-2 py-1.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 transition shadow-sm animate-pulse"
+                              title="Reposicionar a HMI verticalmente para a zona segura mais próxima sem colisões"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Auto-Deslocar para Zona Livre (Y={Math.round(hmiMechanicalClash.safeY)}mm)</span>
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-200">
@@ -5103,7 +5693,7 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                             <span>Sem Interferência Mecânica</span>
                           </div>
                           <p className="text-[10px] text-emerald-200/90 mt-1 leading-relaxed">
-                            Espaço livre atrás da porta (~{hmiDepthMm}mm de profundidade garantida). O quadro fecha sem colisões com as calhas DIN ou componentes interiores.
+                            Espaço livre atrás da porta (~{hmiDepthMm}mm garantida, folga de {hmiMechanicalClash.minClearanceMm}mm). O quadro fecha perfeitamente sem colisões com as calhas DIN ou componentes interiores.
                           </p>
                         </div>
                       )}
@@ -5262,28 +5852,62 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 Calha Destino:
               </span>
               <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                {rails.map((r, idx) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setQuickRailIdx(idx)}
-                    className={`flex-1 py-1 px-1 rounded text-xs font-mono font-semibold transition text-center ${
-                      quickRailIdx === idx
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    Calha {idx + 1}
-                  </button>
-                ))}
+                {rails.map((r, idx) => {
+                  const rSum = r.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0);
+                  const rUsable = r.usableWidthMm || usableWidth;
+                  const rIsOver = rSum > rUsable;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setQuickRailIdx(idx)}
+                      className={`flex-1 py-1 px-1 rounded text-xs font-mono font-semibold transition text-center ${
+                        quickRailIdx === idx
+                          ? rIsOver
+                            ? 'bg-red-600 text-white shadow-xs font-bold'
+                            : 'bg-blue-600 text-white shadow-xs'
+                          : rIsOver
+                          ? 'text-red-400 bg-red-950/40 border border-red-500/50 hover:bg-red-900/40'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      }`}
+                      title={rIsOver ? `⚠️ Calha ${idx + 1} com sobrecarga: ${Math.round(rSum)}mm > ${rUsable}mm!` : `Calha ${idx + 1}: ${Math.round(rSum)}mm / ${rUsable}mm`}
+                    >
+                      {rIsOver ? '⚠️ C' : 'Calha '}{idx + 1}
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Gauge de capacidade da calha selecionada */}
+              {(() => {
+                const currentQuickRail = rails[quickRailIdx] || rails[0];
+                if (!currentQuickRail) return null;
+                const qSum = Math.round(currentQuickRail.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0));
+                const qUsable = currentQuickRail.usableWidthMm || usableWidth;
+                const qIsOver = qSum > qUsable;
+                const qPct = qUsable > 0 ? Math.round((qSum / qUsable) * 100) : 0;
+                return (
+                  <div className={`mt-1.5 px-2 py-1 rounded text-[10px] font-mono flex items-center justify-between border ${
+                    qIsOver ? 'bg-red-950/60 border-red-500/70 text-red-200' : 'bg-slate-900/60 border-slate-800 text-slate-400'
+                  }`}>
+                    <span className="flex items-center gap-1 font-sans">
+                      {qIsOver ? <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" /> : null}
+                      <span className={qIsOver ? 'font-bold text-red-300' : ''}>{qIsOver ? 'Sobrecarga:' : 'Ocupação:'}</span>
+                    </span>
+                    <span className={`font-bold ${qIsOver ? 'text-red-300 font-mono' : 'text-sky-300'}`}>
+                      {qSum}mm / {qUsable}mm ({qPct}%){qIsOver ? ` (+${qSum - qUsable}mm)` : ''}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Category Filter Chips */}
             <div className="flex flex-wrap gap-1 mb-2.5 shrink-0">
               {[
                 ...(customComponents.length > 0 ? [{ id: 'custom', label: `⭐ Meus (${customComponents.length})`, highlight: true }] : []),
-                { id: 'generic', label: '📦 Genérico', highlight: true },
+                { id: 'contactors', label: '🧲 Contactores', highlight: true },
+                { id: 'generic', label: '📦 Genérico' },
                 { id: 'meanwell', label: '⚡ Mean Well' },
                 { id: 'siemens', label: '🤖 Siemens' },
                 { id: 'viking', label: '🔌 Viking 3' },
@@ -5319,6 +5943,15 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               {allComponents.filter((item) => {
                 if (quickCategory === 'custom') {
                   return customComponents.some((c) => c.catalogId === item.catalogId);
+                }
+                if (quickCategory === 'contactors') {
+                  return (
+                    item.category === 'motor_control' ||
+                    item.name.toLowerCase().includes('contactor') ||
+                    item.name.toLowerCase().includes('contator') ||
+                    item.description.toLowerCase().includes('contactor') ||
+                    item.description.toLowerCase().includes('contator')
+                  );
                 }
                 if (quickCategory === 'generic') {
                   return item.brand === 'Genérico' || item.name.includes('Genérico');
@@ -5459,6 +6092,24 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     <span>Eliminar</span>
                   </button>
                 </div>
+
+                {/* Warning if the component's rail is over capacity */}
+                {(() => {
+                  const itemRail = rails.find((r) => r.items.some((it) => it.instanceId === selectedItem.instanceId));
+                  if (!itemRail) return null;
+                  const sumW = Math.round(itemRail.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0));
+                  const effW = itemRail.usableWidthMm || usableWidth;
+                  if (sumW <= effW) return null;
+                  return (
+                    <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-500/80 text-red-200 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 animate-pulse" />
+                      <div className="text-[11px] leading-tight">
+                        <strong className="text-white block">Sobrecarga na {itemRail.name}:</strong>
+                        <span>Ocupação de {sumW}mm excede a largura útil ({effW}mm) em +{sumW - effW}mm. A calha está destacada a vermelho.</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Tag and Part Number */}
                 <div className="flex items-center gap-2">
@@ -5794,6 +6445,101 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                 </div>
 
                 {/* ========================================================
+                    APARÊNCIA GRÁFICA & FICHEIRO SVG DO COMPONENTE
+                   ======================================================== */}
+                <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2.5">
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <FileCode className="w-3.5 h-3.5 text-blue-400" />
+                      <span className="text-xs font-bold text-slate-200">Aparência Gráfica (SVG)</span>
+                    </div>
+                    {selectedItem.data.customSvg ? (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold bg-blue-950 text-blue-300 border border-blue-800">
+                        SVG Ativo
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded text-slate-400 bg-slate-900 border border-slate-800">
+                        Vetor Padrão
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedItem.data.customSvg ? (
+                    <div className="space-y-2">
+                      {/* Mini preview with border */}
+                      <div className="flex items-center gap-3 p-2 bg-slate-900/90 rounded-md border border-slate-800">
+                        <div className="w-14 h-14 bg-slate-950 rounded border border-slate-800 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                          <img
+                            src={svgToDataUri(selectedItem.data.customSvg)}
+                            alt="Pré-visualização SVG"
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1 text-xs">
+                          <div className="font-mono text-slate-200 truncate font-semibold">
+                            {selectedItem.data.svgFileName || 'Ficheiro .SVG Carregado'}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            Proporção: <span className="font-semibold text-slate-300">{selectedItem.data.svgAspectMode === 'stretch' ? 'Preenchimento (Esticar)' : 'Proporcional (Conter)'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newMode = selectedItem.data.svgAspectMode === 'stretch' ? 'contain' : 'stretch';
+                                handleApplyComponentSvg(
+                                  selectedItem.instanceId,
+                                  selectedItem.data.customSvg,
+                                  selectedItem.data.svgFileName,
+                                  newMode
+                                );
+                              }}
+                              className="text-[10px] text-blue-400 hover:text-blue-300 underline font-mono"
+                            >
+                              Alternar Proporção
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsSvgPickerOpen(true)}
+                          className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs"
+                        >
+                          <FileCode className="w-3.5 h-3.5" />
+                          <span>Alterar / Galeria</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyComponentSvg(selectedItem.instanceId, undefined, undefined, 'contain')}
+                          className="py-1.5 px-2.5 bg-slate-800 hover:bg-red-950/60 hover:text-red-300 border border-slate-700 text-slate-300 rounded text-xs transition"
+                          title="Remover ficheiro SVG e restaurar desenho técnico padrão"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Pode carregar ficheiros <span className="font-mono text-slate-200">.svg</span> reais de fabricantes (Siemens, Schneider, Phoenix Contact, etc.) ou escolher da nossa biblioteca industrial.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsSvgPickerOpen(true)}
+                        className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 border border-blue-500/40 hover:border-blue-400 text-blue-300 hover:text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs"
+                      >
+                        <FileCode className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Carregar Ficheiro .SVG / Galeria</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ========================================================
                     ALINHAMENTO MAGNÉTICO & POSIÇÃO (SNAP 5mm UNIFORME)
                    ======================================================== */}
                 {(() => {
@@ -6029,30 +6775,149 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
             ==================================================================== */}
         {activeSideTab === 'enclosure_size' && (
           <div className="flex-1 flex flex-col p-3 overflow-y-auto space-y-4">
-            {/* Header info */}
-            <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
-              <div className="flex items-center gap-2 mb-1">
-                <Box className="w-4 h-4 text-sky-400" />
-                <span className="text-xs font-bold text-slate-100">Dimensões do Quadro & Calhas</span>
+            {/* Cartão do Modelo de Quadro Ativo & Custo BOM */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-sky-800/40 rounded-xl p-3 shadow-md space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">
+                      {config.enclosureBrand || config.enclosureModel?.brand || 'Quadro Industrial'}
+                    </span>
+                    {config.enclosureModel?.isCustom && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        Personalizado
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[130px]" title={config.enclosurePartNumber || config.enclosureModel?.partNumber || `QD-${config.widthMm}x${config.heightMm}`}>
+                      {config.enclosurePartNumber || config.enclosureModel?.partNumber || `QD-${config.widthMm}x${config.heightMm}`}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-white mt-1 truncate" title={config.enclosureModel?.name || `Armário ${config.widthMm}x${config.heightMm}x${config.depthMm}mm`}>
+                    {config.enclosureModel?.name || `Armário ${config.widthMm}×${config.heightMm}×${config.depthMm} mm`}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEnclosurePickerOpen(true)}
+                  className="shrink-0 px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[11px] font-bold transition shadow-xs flex items-center gap-1 cursor-pointer"
+                  title="Abrir Catálogo Completo de Fabricantes e Meus Modelos"
+                >
+                  <BookOpen className="w-3 h-3" />
+                  <span>Catálogo</span>
+                </button>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Ajuste em tempo real as medidas do armário, a secção das canaletas ranhuradas e a distribuição das calhas DIN 35mm.
-              </p>
+
+              {/* Metadados: IP / IK / Material */}
+              <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                <div className="bg-slate-950/70 border border-slate-800 rounded p-1.5 text-center">
+                  <span className="text-slate-400 block text-[9px] uppercase">Proteção</span>
+                  <span className="font-bold text-sky-400 font-mono">{config.ipRating || 'IP65'}</span>
+                </div>
+                <div className="bg-slate-950/70 border border-slate-800 rounded p-1.5 text-center">
+                  <span className="text-slate-400 block text-[9px] uppercase">Impacto</span>
+                  <span className="font-bold text-emerald-400 font-mono">{config.ikRating || 'IK08'}</span>
+                </div>
+                <div className="bg-slate-950/70 border border-slate-800 rounded p-1.5 text-center">
+                  <span className="text-slate-400 block text-[9px] uppercase">Material</span>
+                  <span className="font-bold text-slate-200 capitalize truncate">
+                    {config.enclosureMaterial === 'sheet_steel' ? 'Aço' : config.enclosureMaterial === 'stainless_steel' ? 'Inox' : config.enclosureMaterial === 'polyester' ? 'Poliéster' : (config.enclosureMaterial || 'Aço')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Campo de Preço do Quadro no BOM (Componente de Custo) */}
+              <div className="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Euro className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Custo BOM do Quadro (QD1):</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-slate-400 font-mono">€</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={config.enclosurePriceEur ?? (config.enclosureModel?.estimatedPriceEur ?? getDefaultEnclosurePrice(config.widthMm, config.heightMm, config.depthMm, config.enclosureMaterial || 'sheet_steel'))}
+                      onChange={(e) => handleUpdateEnclosurePrice(parseFloat(e.target.value) || 0)}
+                      className="w-24 bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-emerald-300 text-right outline-hidden"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <p className="text-[9.5px] text-slate-400 leading-tight">
+                  O quadro é tratado como componente e o seu preço conta diretamente no orçamento geral e exportação de BOM.
+                </p>
+              </div>
+
+              {/* Salvar como Modelo Reutilizável */}
+              <div className="pt-1 border-t border-slate-800/80">
+                {!isSavingCustomEnclosure ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSavingCustomEnclosure(true);
+                      setCustomEnclosureSaveName(config.enclosureModel?.name || `Quadro ${config.widthMm}x${config.heightMm}`);
+                    }}
+                    className="w-full py-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Guardar como Modelo Reutilizável</span>
+                  </button>
+                ) : (
+                  <div className="bg-slate-950 p-2 rounded-lg border border-amber-500/30 space-y-2 animate-in fade-in duration-150">
+                    <span className="text-[10px] font-bold text-amber-300 block">Nome do Modelo Personalizado:</span>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={customEnclosureSaveName}
+                        onChange={(e) => setCustomEnclosureSaveName(e.target.value)}
+                        placeholder="Ex: Armário Fabrico Próprio 600x800"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-hidden focus:border-amber-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCurrentAsCustomEnclosure()}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-bold transition cursor-pointer"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsSavingCustomEnclosure(false)}
+                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-xs transition cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Presets rápidos de armário */}
+            {/* Presets rápidos de armário com modelos industriais reais */}
             <div>
-              <span className="text-[11px] font-bold text-slate-300 block mb-1.5 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Modelos Industriais Rápidos:
-              </span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Modelos Industriais Populares:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEnclosurePickerOpen(true)}
+                  className="text-[10px] text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Catálogo ({STANDARD_ENCLOSURE_CATALOG.length})</span>
+                  <ArrowRight className="w-2.5 h-2.5" />
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { label: '400x600 · 2 Calhas', w: 400, h: 600, d: 200, r: 2, sp: 180, duct: 40 },
-                  { label: '500x700 · 3 Calhas', w: 500, h: 700, d: 250, r: 3, sp: 160, duct: 40 },
-                  { label: '600x800 · 3 Calhas', w: 600, h: 800, d: 250, r: 3, sp: 170, duct: 40 },
-                  { label: '600x800 · 4 Calhas', w: 600, h: 800, d: 250, r: 4, sp: 150, duct: 40 },
-                  { label: '800x1000 · 4 Calhas', w: 800, h: 1000, d: 300, r: 4, sp: 175, duct: 60 },
-                  { label: '800x1200 · 5 Calhas', w: 800, h: 1200, d: 300, r: 5, sp: 170, duct: 60 },
+                  { brand: 'Schneider', name: 'Spacial S3D 400x600', w: 400, h: 600, d: 200, r: 2, sp: 180, duct: 40, price: 118.00, ref: 'NSYS3D6420P', ip: 'IP66' },
+                  { brand: 'Schneider', name: 'Spacial S3D 500x700', w: 500, h: 700, d: 250, r: 3, sp: 160, duct: 40, price: 142.00, ref: 'NSYS3D7525P', ip: 'IP66' },
+                  { brand: 'Schneider', name: 'Spacial S3D 600x800', w: 600, h: 800, d: 250, r: 3, sp: 170, duct: 40, price: 165.00, ref: 'NSYS3D8625P', ip: 'IP66' },
+                  { brand: 'Hager', name: 'Quadro Plus 600x800', w: 600, h: 800, d: 250, r: 4, sp: 150, duct: 40, price: 195.00, ref: 'FP52TW', ip: 'IP55' },
+                  { brand: 'Rittal', name: 'AX Compact 800x1000', w: 800, h: 1000, d: 300, r: 4, sp: 175, duct: 60, price: 245.00, ref: 'AX 1080.000', ip: 'IP66' },
+                  { brand: 'Legrand', name: 'Atlantic 800x1200', w: 800, h: 1200, d: 300, r: 5, sp: 170, duct: 60, price: 289.00, ref: '035532', ip: 'IP66' },
                 ].map((preset, idx) => {
                   const isActive =
                     config.widthMm === preset.w &&
@@ -6063,24 +6928,41 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                     <button
                       key={idx}
                       type="button"
-                      onClick={() =>
-                        handleUpdateCabinetDimensions({
+                      onClick={() => {
+                        const catMatch = STANDARD_ENCLOSURE_CATALOG.find((m) => m.partNumber === preset.ref) || {
+                          id: `enc-preset-${idx}`,
+                          name: `${preset.brand} ${preset.name}`,
+                          brand: preset.brand,
+                          partNumber: preset.ref,
                           widthMm: preset.w,
                           heightMm: preset.h,
                           depthMm: preset.d,
-                          railCount: preset.r,
+                          ipRating: preset.ip as any,
+                          ikRating: 'IK10' as const,
+                          material: 'sheet_steel' as EnclosureMaterial,
+                          doorType: 'solid' as const,
+                          mountingPlateIncluded: true,
+                          recommendedRails: preset.r,
+                          estimatedPriceEur: preset.price,
+                          description: `${preset.brand} ${preset.name} ${preset.w}x${preset.h}x${preset.d}mm`,
+                        };
+                        handleSelectEnclosureModel(catMatch as EnclosureModel);
+                        handleUpdateCabinetDimensions({
                           railSpacingMm: preset.sp,
                           sideDuctWidthMm: preset.duct,
-                        })
-                      }
-                      className={`text-left p-1.5 rounded border transition text-[11px] ${
+                        });
+                      }}
+                      className={`text-left p-1.5 rounded border transition text-[11px] cursor-pointer ${
                         isActive
-                          ? 'bg-blue-600/30 border-blue-500 text-sky-200 font-bold'
-                          : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
+                          ? 'bg-sky-600/30 border-sky-500 text-sky-200 font-bold'
+                          : 'bg-slate-950 hover:bg-slate-850 border-slate-800 text-slate-300'
                       }`}
                     >
-                      <div className="font-mono">{preset.w}x{preset.h} mm</div>
-                      <div className="text-[10px] text-slate-400">{preset.r} Calhas · Canaleta {preset.duct}mm</div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs">{preset.w}x{preset.h}</span>
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold">€{preset.price.toFixed(0)}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate">{preset.brand} · {preset.r} Calhas</div>
                     </button>
                   );
                 })}
@@ -6295,17 +7177,30 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
               </div>
 
               {/* Lista e Renomeação individual das Calhas */}
-              <div className="space-y-1.5 pt-1">
+              <div className="space-y-2 pt-1">
                 <span className="text-[11px] font-semibold text-slate-400 block">Identificação das Calhas:</span>
                 {rails.map((rail, idx) => {
-                  const usedMm = Math.round(rail.items.reduce((acc, it) => acc + it.data.widthMm + 5, 0));
-                  const pct = Math.min(100, Math.round((usedMm / usableWidth) * 100));
+                  const effUsable = rail.usableWidthMm || usableWidth;
+                  const sumW = Math.round(rail.items.reduce((acc, it) => acc + (it.data.widthMm || 0), 0));
+                  const isOver = sumW > effUsable;
+                  const excessMm = Math.max(0, sumW - effUsable);
+                  const pct = effUsable > 0 ? Math.round((sumW / effUsable) * 100) : 0;
 
                   return (
                     <div
                       key={rail.id}
-                      className="bg-slate-900 border border-slate-800 rounded p-2 text-xs flex flex-col gap-1.5"
+                      className={`rounded-lg p-2.5 text-xs flex flex-col gap-1.5 transition ${
+                        isOver
+                          ? 'bg-red-950/40 border-2 border-red-500 shadow-md ring-1 ring-red-500/40'
+                          : 'bg-slate-900 border border-slate-800'
+                      }`}
                     >
+                      {isOver && (
+                        <div className="flex items-center gap-1.5 p-1 px-2 rounded bg-red-600/20 border border-red-500/40 text-red-300 text-[10px] font-bold">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          <span>⚠️ SOBRECARGA: Excede a largura útil em +{excessMm}mm!</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2">
                         <input
                           type="text"
@@ -6314,13 +7209,18 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                             const updated = rails.map((r, i) => (i === idx ? { ...r, name: e.target.value } : r));
                             onUpdateProject({ ...project, rails: updated });
                           }}
-                          className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-blue-500"
+                          className={`flex-1 rounded px-2 py-0.5 text-xs font-semibold focus:outline-hidden ${
+                            isOver
+                              ? 'bg-red-950 border border-red-500 text-red-100 focus:border-red-400 font-bold'
+                              : 'bg-slate-950 border border-slate-700 text-slate-200 focus:border-blue-500'
+                          }`}
                         />
                         {rails.length > 1 && (
                           <button
                             type="button"
                             onClick={() => handleRemoveRail(idx)}
-                            className="p-1 text-slate-400 hover:text-red-400 transition"
+                            className="p-1 text-slate-400 hover:text-red-400 transition cursor-pointer"
+                            title="Remover Calha"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -6328,9 +7228,18 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
                       </div>
                       <div className="flex justify-between items-center text-[10px] text-slate-400">
                         <span>{rail.items.length} componentes</span>
-                        <span className={`font-mono ${pct > 90 ? 'text-amber-400 font-bold' : 'text-slate-300'}`}>
-                          {usedMm}mm / {usableWidth}mm ({pct}%)
+                        <span className={`font-mono font-bold ${isOver ? 'text-red-400' : pct > 90 ? 'text-amber-400' : 'text-slate-300'}`}>
+                          {sumW}mm / {effUsable}mm ({pct}%)
                         </span>
+                      </div>
+                      {/* Visual progress bar */}
+                      <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            isOver ? 'bg-red-500 animate-pulse' : pct > 85 ? 'bg-amber-400' : 'bg-sky-400'
+                          }`}
+                          style={{ width: `${Math.min(100, pct)}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -7260,6 +8169,42 @@ export const CabinetLayout: React.FC<CabinetLayoutProps> = ({
           setTimeout(() => setRecentNotification(null), 3500);
         }}
       />
+
+      {/* Modal de Seleção de Armários/Invólucros e Gestão de Modelos Reutilizáveis */}
+      <EnclosurePickerModal
+        isOpen={isEnclosurePickerOpen}
+        onClose={() => setIsEnclosurePickerOpen(false)}
+        currentConfig={config}
+        onSelectModel={handleSelectEnclosureModel}
+      />
+
+      {/* Modal de Escolha / Carregamento de Ficheiro SVG do Componente */}
+      {selectedItem && (
+        <ComponentSvgPickerModal
+          isOpen={isSvgPickerOpen}
+          onClose={() => setIsSvgPickerOpen(false)}
+          component={{
+            ...selectedItem.data,
+            tag: selectedItem.tag,
+            widthMm: selectedItem.data.widthMm,
+            heightMm: selectedItem.data.heightMm || 90,
+            depthMm: selectedItem.data.depthMm || 70,
+            customSvg: selectedItem.data.customSvg,
+            svgFileName: selectedItem.data.svgFileName,
+            svgAspectMode: selectedItem.data.svgAspectMode || 'contain',
+          }}
+          onApplySvg={(svgContent, fileName, aspectMode) => {
+            handleApplyComponentSvg(selectedItem.instanceId, svgContent, fileName, aspectMode);
+            setRecentNotification(`Ficheiro SVG aplicado ao componente ${selectedItem.tag}`);
+            setTimeout(() => setRecentNotification(null), 3500);
+          }}
+          onRemoveSvg={() => {
+            handleApplyComponentSvg(selectedItem.instanceId, undefined, undefined, 'contain');
+            setRecentNotification(`SVG removido de ${selectedItem.tag}`);
+            setTimeout(() => setRecentNotification(null), 3500);
+          }}
+        />
+      )}
     </div>
   );
 };

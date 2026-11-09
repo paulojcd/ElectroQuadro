@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { CableGland, GlandMetric } from '../types/electrical';
-import { GLAND_SPECS, CIRCUIT_TYPE_INFO, autoDistributeGlands } from '../utils/glandUtils';
+import { GLAND_SPECS, CIRCUIT_TYPE_INFO, autoDistributeGlands, getDefaultGlands } from '../utils/glandUtils';
 import { 
   X, Download, Copy, Check, Plus, Trash2, ArrowUpCircle, ArrowDownCircle,
-  Sliders, Box, AlertCircle, Wrench, ShieldCheck, Printer
+  Sliders, Box, AlertCircle, Wrench, ShieldCheck, Printer, RotateCcw
 } from 'lucide-react';
 
 interface GlandScheduleModalProps {
@@ -239,6 +239,31 @@ export const GlandScheduleModal: React.FC<GlandScheduleModalProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>Exportar Mapa (CSV)</span>
             </button>
+            {glands.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Tem a certeza que deseja remover todos os bucins deste quadro?')) {
+                    onUpdateGlands([]);
+                  }
+                }}
+                className="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 hover:text-red-100 border border-red-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                title="Eliminar todos os bucins definidos no quadro"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Limpar Todos ({glands.length})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onUpdateGlands(getDefaultGlands(cabWidth, true))}
+                className="px-2.5 py-1.5 bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                title="Repor bucins padrão recomendados"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                <span>Repor Padrão</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -498,6 +523,17 @@ export const GlandScheduleModal: React.FC<GlandScheduleModalProps> = ({
                       </tr>
                     );
                   })}
+                  {displayedGlands.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="py-8 px-4 text-center text-slate-400">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Wrench className="w-6 h-6 text-slate-600" />
+                          <p className="text-xs font-semibold text-slate-300">Nenhum bucim configurado no quadro.</p>
+                          <p className="text-[11px] text-slate-500">Pode adicionar bucins individuais de Entrada/Saída ou repor os bucins padrão.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

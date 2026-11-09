@@ -110,6 +110,15 @@ export const THERMAL_SPECS: Record<ComponentCategory, ThermalClearanceSpec> = {
     dissipationProfile: 'low',
     description: 'Compatível com pentes de barramento 1P+N de fase e neutro contíguo (0mm) ou 3mm entre circuitos com temporização.',
   },
+  enclosure: {
+    category: 'enclosure',
+    name: 'Quadro / Armário de Distribuição',
+    recommendedLateralMm: 0,
+    minLateralMm: 0,
+    topBottomBufferMm: 0,
+    dissipationProfile: 'minimal',
+    description: 'Invólucro exterior do quadro elétrico (estrutura envolvente).',
+  },
 };
 
 export interface ThermalIssue {
@@ -597,6 +606,7 @@ export function executeAutoLayout(
       // Sort items within each rail logically
       const itemsInBin = (railBins[rIdx] || []).sort((a, b) => {
         const catOrder: Record<ComponentCategory, number> = {
+          enclosure: 0,
           protection_ac: 1,
           residential_modular: 2,
           power_supply: 3,

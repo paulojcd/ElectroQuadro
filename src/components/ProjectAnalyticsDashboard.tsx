@@ -33,6 +33,7 @@ import {
   Printer,
   Sparkles,
   ArrowRight,
+  Box,
 } from 'lucide-react';
 import { getConsolidatedBom } from '../utils/bomUtils';
 
@@ -43,10 +44,11 @@ interface ProjectAnalyticsDashboardProps {
 
 // Visual Palette for charts
 const CATEGORY_COLORS: Record<string, string> = {
+  enclosure: '#38bdf8',   // Sky Blue (Armário / Invólucro)
   disjuntores: '#3b82f6', // Blue (Circuit Breakers / Protection)
   bornes: '#10b981',      // Emerald Green (Terminal Blocks)
   plcs: '#8b5cf6',        // Purple (PLCs & Controllers)
-  fontes: '#0284c7',      // Sky Blue (Power Supplies)
+  fontes: '#06b6d4',      // Cyan (Power Supplies)
   reles: '#f59e0b',       // Amber (Relays & Contactors)
   outros: '#64748b',      // Slate (Accessories & Others)
 };
@@ -193,7 +195,23 @@ export const ProjectAnalyticsDashboard: React.FC<ProjectAnalyticsDashboardProps>
       }
     });
 
+    const encItem = bomItems.find((it) => it.category === 'enclosure');
+    const encPrice = encItem ? encItem.totalPriceEur : (project.config.enclosurePriceEur || 0);
+    const encBrand = project.config.enclosureBrand || project.config.enclosureModel?.brand || 'Standard';
+    const encPart = project.config.enclosurePartNumber || project.config.enclosureModel?.partNumber || `QD-${project.config.widthMm}x${project.config.heightMm}`;
+
     const list = [
+      {
+        key: 'enclosure',
+        name: 'Armário / Invólucro',
+        shortName: 'Quadro',
+        count: 1,
+        width: 0,
+        cost: Math.round(encPrice * 100) / 100,
+        color: CATEGORY_COLORS.enclosure,
+        icon: Box,
+        description: `Quadro elétrico ${encBrand} (${encPart}) · ${project.config.widthMm}x${project.config.heightMm}x${project.config.depthMm}mm`,
+      },
       {
         key: 'disjuntores',
         name: 'Disjuntores & Proteções',

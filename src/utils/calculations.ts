@@ -296,9 +296,9 @@ export function runEngineeringValidations(project: ProjectState): ValidationIssu
         id: `val-rail-overflow-${idx}`,
         type: 'error',
         category: 'space',
-        title: `Calha ${idx + 1} com Excesso de Componentes`,
-        description: `Os componentes ocupam ${usedMm}mm para um espaço útil de apenas ${rail.usableWidthMm}mm (excesso de ${usedMm - rail.usableWidthMm}mm).`,
-        suggestedAction: 'Transfira alguns componentes para outra calha ou aumente a largura do quadro.',
+        title: `Calha ${idx + 1} com Sobrecarga de Espaço Útil`,
+        description: `A soma da largura dos componentes (${usedMm}mm) excede a largura útil (usableWidthMm: ${rail.usableWidthMm}mm) em +${usedMm - rail.usableWidthMm}mm. A calha está destacada a vermelho no esquema de disposição.`,
+        suggestedAction: 'Transfira componentes para outra calha ou aumente as dimensões do armário no painel de configurações.',
       });
     } else if (usedMm > rail.usableWidthMm * 0.9) {
       issues.push({

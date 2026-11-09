@@ -91,7 +91,7 @@ export function getNetTypeDescription(netType: WireNetType): string {
  */
 export function getProjectWiringList(project: ProjectState): WiringListItem[] {
   const baseWires = generateDefaultWires(project);
-  const activeWires = project.wires && project.wires.length > 0 ? project.wires : baseWires;
+  const activeWires = project.wires !== undefined ? project.wires : baseWires;
 
   // Build component and rail spatial map
   const compMap: Record<string, { item: PlacedComponent; railIdx: number; railName: string; railY: number; centerX: number; topY: number; bottomY: number }> = {};

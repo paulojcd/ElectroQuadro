@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ProjectState } from '../types/electrical';
 import { downloadSchematicPdf, SchematicPdfExportOptions } from '../utils/schematicPdfExporter';
+import { downloadTechnicalReportPdf } from '../utils/technicalReportPdfExporter';
 import { 
   FileText, Download, Printer, Check, X, Sliders, Layers, 
   Sparkles, CheckSquare, Square, Zap, Cpu, Building, User, Calendar, 
-  Euro, Info, ShieldCheck, RefreshCw, Eye, Box, Wrench, Shield
+  Euro, Info, ShieldCheck, RefreshCw, Eye, Box, Wrench, Shield, Award
 } from 'lucide-react';
 
 interface SchematicPdfExportModalProps {
@@ -725,6 +726,35 @@ export const SchematicPdfExportModal: React.FC<SchematicPdfExportModalProps> = (
             >
               <Printer className="w-4 h-4" />
               <span>Imprimir</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsGenerating(true);
+                try {
+                  await downloadTechnicalReportPdf(project, {
+                    companyName: options.companyName,
+                    technicianName: options.technicianName,
+                    clientName: options.clientName,
+                    revision: options.revision,
+                    customNotes: options.customNotes,
+                    includePrices: options.includePrices,
+                  });
+                  setSuccessMessage('Relatório Técnico Oficial (Conformidade, Balanço & BOM) descarregado com sucesso!');
+                  setTimeout(() => setSuccessMessage(null), 4000);
+                } catch (err) {
+                  console.error('Error generating technical report PDF:', err);
+                } finally {
+                  setIsGenerating(false);
+                }
+              }}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-sky-200 bg-sky-950/80 hover:bg-sky-900 border border-sky-600/50 rounded-xl transition cursor-pointer"
+              title="Gerar Relatório Técnico Oficial de Auditoria (4 Páginas A4: Conformidade EN 61439, Balanço 24V e BOM)"
+            >
+              <Award className="w-4 h-4 text-amber-300" />
+              <span>Relatório Técnico (A4)</span>
             </button>
 
             <button

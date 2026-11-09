@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EnclosureConfig } from '../types/electrical';
 import { verifyEnclosureIpIk, ENVIRONMENT_SPECS } from '../utils/ipIkVerification';
-import { X, Check, Box, Sliders, Layers, Info, AlertCircle, Sparkles, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { X, Check, Box, Sliders, Layers, Info, AlertCircle, Sparkles, ShieldCheck, ShieldAlert, AlertTriangle, Euro, Tag, Building } from 'lucide-react';
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
@@ -174,6 +174,48 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   required
                 />
                 <span className="text-[10px] text-slate-500 mt-0.5 block">Ex: 200, 250, 300mm</span>
+              </div>
+            </div>
+
+            {/* Dados Comerciais e Custo do Armário no BOM */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <span className="text-[11px] font-bold text-slate-300 block mb-2 flex items-center gap-1.5">
+                <Euro className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Modelo Comercial & Custo no Orçamento / BOM:</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">Fabricante:</label>
+                  <input
+                    type="text"
+                    value={formData.enclosureBrand || ''}
+                    onChange={(e) => setFormData({ ...formData, enclosureBrand: e.target.value })}
+                    placeholder="Ex: Schneider, Rittal, Hager"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">Ref. Comercial (Part Number):</label>
+                  <input
+                    type="text"
+                    value={formData.enclosurePartNumber || ''}
+                    onChange={(e) => setFormData({ ...formData, enclosurePartNumber: e.target.value })}
+                    placeholder="Ex: NSYS3D6420P"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">Preço no BOM (€):</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={formData.enclosurePriceEur ?? ''}
+                    onChange={(e) => setFormData({ ...formData, enclosurePriceEur: e.target.value ? parseFloat(e.target.value) : undefined })}
+                    placeholder="Ex: 118.00"
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-emerald-300 focus:outline-hidden"
+                  />
+                </div>
               </div>
             </div>
 

@@ -14,7 +14,7 @@ import { SchematicPdfExportModal } from './SchematicPdfExportModal';
 import { 
   Layout, Plus, Trash2, Copy, Move, ZoomIn, ZoomOut, Maximize2, 
   Download, FileText, Check, Settings2, Sliders, Shield, AlertTriangle, 
-  RotateCcw, Sparkles, Grid, Eye, CheckCircle2, ChevronRight, Layers, Box
+  RotateCcw, Sparkles, Grid, Eye, CheckCircle2, ChevronRight, Layers, Box, Ruler, Printer
 } from 'lucide-react';
 
 interface ControlPanelDesignerProps {
@@ -23,6 +23,7 @@ interface ControlPanelDesignerProps {
   onShowNotification?: (msg: string) => void;
   onSwitchToInterior?: () => void;
   onOpenDossierPdf?: () => void;
+  onOpenDrillingTemplate?: () => void;
 }
 
 const PRESET_DIMENSIONS = [
@@ -39,6 +40,7 @@ export const ControlPanelDesigner: React.FC<ControlPanelDesignerProps> = ({
   onUpdateProject,
   onShowNotification,
   onSwitchToInterior,
+  onOpenDrillingTemplate,
 }) => {
   // Ensure control panel config exists, initialized from project.config dimensions
   const controlPanel = useMemo<ControlPanelConfig>(() => {
@@ -463,12 +465,25 @@ export const ControlPanelDesigner: React.FC<ControlPanelDesignerProps> = ({
           <button
             type="button"
             onClick={handleExportDrillingCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs shadow-md shadow-emerald-950/60 transition active:scale-98"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-lg text-xs transition active:scale-98 cursor-pointer"
             title="Descarregar lista de coordenadas X/Y para furar a chapa na oficina"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Exportar Furação (CSV)</span>
+            <span>Furação (CSV)</span>
           </button>
+
+          {/* Print Drilling Template with Margins */}
+          {onOpenDrillingTemplate && (
+            <button
+              type="button"
+              onClick={onOpenDrillingTemplate}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-lg text-xs shadow-md shadow-amber-950/60 transition active:scale-98 cursor-pointer"
+              title="Imprimir Gabarito / Template de Furações com cotas para as 4 margens (A4 / A3 / SVG)"
+            >
+              <Ruler className="w-3.5 h-3.5 text-slate-950" />
+              <span>Imprimir Gabarito de Furação</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -855,7 +870,7 @@ export const ControlPanelDesigner: React.FC<ControlPanelDesignerProps> = ({
                         <path d="M 6 5 A 8 8 0 0 1 -6 5" fill="none" stroke="#fecaca" strokeWidth="1.2" strokeDasharray="3,2" />
                         <polygon points="-6,7 -8,5 -6,3" fill="#fecaca" />
                       </g>
-                    ) : /* ========================================================
+                     ) : /* ========================================================
                         TYPE C: ROTARY SELECTOR SWITCH (Man / Auto / 3-Pos)
                        ======================================================== */
                     dev.type === 'selector' ? (
@@ -870,6 +885,65 @@ export const ControlPanelDesigner: React.FC<ControlPanelDesignerProps> = ({
                         {/* Position indicators */}
                         <circle cx="-9" cy="-7" r="1.5" fill="#94a3b8" />
                         <circle cx="9" cy="-7" r="1.5" fill="#94a3b8" />
+                      </g>
+                    ) : /* ========================================================
+                        TYPE C2: INDUSTRIAL TOGGLE SWITCH (Switch de Alavanca)
+                       ======================================================== */
+                    dev.type === 'toggle_switch' ? (
+                      <g>
+                        {/* Case 1: Missile Flip Safety Cover (Vermelho) */}
+                        {dev.color === '#dc2626' || (dev.label && dev.label.includes('CRÍTICA')) ? (
+                          <g>
+                            {/* Safety Flip Cover Base (Missile Cover) */}
+                            <rect x="-14" y="-19" width="28" height="38" rx="3" fill="#991b1b" stroke="#7f1d1d" strokeWidth="1" />
+                            <rect x="-12" y="-17" width="24" height="34" rx="2" fill="#dc2626" />
+                            {/* Top Spring Hinge Block */}
+                            <rect x="-10" y="-21" width="20" height="5" rx="1.5" fill="#1e293b" stroke="#475569" strokeWidth="0.8" />
+                            <circle cx="0" cy="-18.5" r="1.5" fill="#94a3b8" />
+                            {/* Central Bezel & Lever */}
+                            <circle cx="0" cy="2" r="8" fill="url(#chromeRing)" stroke="#334155" strokeWidth="0.8" />
+                            <circle cx="0" cy="2" r="6" fill="#0f172a" />
+                            <line x1="0" y1="2" x2="0" y2="-9" stroke="#f1f5f9" strokeWidth="4" strokeLinecap="round" />
+                            <circle cx="0" cy="-9" r="3.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.8" />
+                            {/* Hazard Yellow Warning Stripes on Safety Guard */}
+                            <line x1="-10" y1="11" x2="-4" y2="17" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+                            <line x1="-2" y1="11" x2="4" y2="17" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+                            <line x1="6" y1="11" x2="10" y2="15" stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+                          </g>
+                        ) : (dev.holeDiameterMm || 0) > 16 ? (
+                          /* Case 2: 22.5mm Long Lever Switch (Schneider XB4 style) */
+                          <g>
+                            {/* 22.5mm Chrome Collar */}
+                            <circle cx="0" cy="0" r="14" fill="url(#chromeRing)" stroke="#1e293b" strokeWidth="1" />
+                            <circle cx="0" cy="0" r="12" fill="#0f172a" />
+                            {/* Long Ergonomic Lever Handle */}
+                            <rect x="-3.5" y="-18" width="7" height="36" rx="3" fill="#1e293b" stroke="#94a3b8" strokeWidth="1" />
+                            {/* White Direction Indicator */}
+                            <line x1="0" y1="-15" x2="0" y2="-5" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                            {/* Pivot Hub */}
+                            <circle cx="0" cy="0" r="5" fill="#334155" stroke="#94a3b8" strokeWidth="0.8" />
+                            <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+                          </g>
+                        ) : (
+                          /* Case 3: Standard 12.2mm Industrial Metal Bat-Handle Toggle Switch */
+                          <g>
+                            {/* Steel Escutcheon Plate with ON/OFF Stamping */}
+                            <rect x="-12" y="-15" width="24" height="30" rx="2" fill="#1e293b" stroke="#64748b" strokeWidth="1" />
+                            <text x="0" y="-9" fill="#94a3b8" fontSize="4.5" fontWeight="bold" textAnchor="middle" fontFamily="JetBrains Mono">
+                              ON
+                            </text>
+                            <text x="0" y="11.5" fill="#94a3b8" fontSize="4.5" fontWeight="bold" textAnchor="middle" fontFamily="JetBrains Mono">
+                              OFF
+                            </text>
+                            {/* Hexagonal Mounting Nut */}
+                            <polygon points="0,-8 7,-4 7,4 0,8 -7,4 -7,-4" fill="url(#chromeRing)" stroke="#475569" strokeWidth="0.8" />
+                            {/* Threaded Bushing Neck */}
+                            <circle cx="0" cy="0" r="4.5" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+                            {/* Solid Metal Chrome Bat Lever */}
+                            <line x1="0" y1="1" x2="0" y2="-13" stroke="#e2e8f0" strokeWidth="4.5" strokeLinecap="round" />
+                            <circle cx="0" cy="-13" r="3.2" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.8" />
+                          </g>
+                        )}
                       </g>
                     ) : /* ========================================================
                         TYPE D: PILOT LIGHT LED Ø22.5mm
@@ -1068,6 +1142,7 @@ export const ControlPanelDesigner: React.FC<ControlPanelDesignerProps> = ({
                   { id: 'pushbutton', label: 'Botões 22mm' },
                   { id: 'emergency_stop', label: 'Emergência' },
                   { id: 'selector', label: 'Seletores' },
+                  { id: 'toggle_switch', label: 'Switches Alavanca' },
                   { id: 'pilot_light', label: 'Sinalizadores' },
                   { id: 'meter', label: 'Instrumentos' },
                 ].map((cat) => (

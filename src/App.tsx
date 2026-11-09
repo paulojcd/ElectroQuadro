@@ -33,6 +33,7 @@ import { runEngineeringValidations, calculatePowerBalance } from './utils/calcul
 import { getDefaultGlands } from './utils/glandUtils';
 import { useAutoBackupOnIdle } from './hooks/useAutoBackupOnIdle';
 import { downloadCompleteUnifilarDiagramPdf } from './utils/schematicPdfExporter';
+import { downloadTechnicalReportPdf } from './utils/technicalReportPdfExporter';
 import { exportBomToExcelXml } from './utils/bomExporter';
 import { 
   saveProjectToLibrary, 
@@ -51,7 +52,7 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (!parsed.glands || parsed.glands.length === 0) {
+        if (parsed.glands === undefined) {
           parsed.glands = getDefaultGlands(parsed.config?.widthMm || 600, parsed.config?.supplyVoltage?.includes('400V'));
         }
         return parsed;
@@ -61,7 +62,7 @@ export default function App() {
     }
     // Default to Siemens S7-1200 + Mean Well NDR-120
     const initial = TEMPLATES[0].state;
-    if (!initial.glands || initial.glands.length === 0) {
+    if (initial.glands === undefined) {
       initial.glands = getDefaultGlands(initial.config.widthMm, false);
     }
     return initial;
@@ -377,6 +378,23 @@ export default function App() {
     }
   };
 
+  const handleExportTechnicalReportPdf = async () => {
+    showToast('A gerar Relatório Técnico Oficial em PDF (EN 61439)...');
+    try {
+      await downloadTechnicalReportPdf(project, {
+        companyName: 'ElectroCad Studio Pro',
+        technicianName: 'Eng. Eletrotécnico Responsável',
+        clientName: project.config.notes?.includes('Cliente:')
+          ? project.config.notes.split('Cliente:')[1]?.split('\n')[0]?.trim()
+          : 'Cliente Final / Entidade Exploradora',
+      });
+      showToast('Relatório Técnico Oficial (PDF) descarregado com sucesso!');
+    } catch (e) {
+      console.error('Erro ao gerar relatório técnico PDF:', e);
+      showToast('Erro ao gerar relatório técnico PDF.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Microsoft Office Style Top Ribbon Navigation (Hidden in Immersive Mode) */}
@@ -480,6 +498,7 @@ export default function App() {
           onResetWiresToDefault={handleResetWiresToDefault}
           onQuickExportWiringCsv={handleQuickExportWiringCsv}
           onExportSvg={handleExportSvg}
+          onExportTechnicalReportPdf={handleExportTechnicalReportPdf}
           onOpenSchematicPdf={() => setIsSchematicPdfModalOpen(true)}
           onExportUnifilarPdf={async () => {
             showToast('A gerar Diagrama Unifilar Completo em PDF (IEC)...');
@@ -635,6 +654,7 @@ export default function App() {
             onOpenIpIkVerification={() => setIsIpIkModalOpen(true)}
             onOpenComplianceDocs={() => setIsComplianceDocsOpen(true)}
             onOpenIecAssistant={() => setIsIecAssistantOpen(true)}
+            onExportTechnicalReportPdf={handleExportTechnicalReportPdf}
             onUpdateConfig={handleSaveConfig}
           />
         )}
@@ -676,14 +696,15 @@ export default function App() {
 
           <div className="flex items-center gap-2.5">
             <button
+              type="button"
               onClick={() => {
                 setCatalogTargetRail(0);
                 setIsCatalogOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded border border-slate-800 text-xs transition"
+              className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-md border border-slate-800 transition active:scale-95"
+              title="Adicionar Componente: Abrir Catálogo Técnico"
             >
               <Plus className="w-3.5 h-3.5 text-blue-400" />
-              <span>Adicionar Componente</span>
             </button>
 
             {errorCount > 0 ? (

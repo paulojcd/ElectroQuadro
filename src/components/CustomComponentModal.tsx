@@ -4,8 +4,10 @@ import { CATEGORY_DEFINITIONS } from '../utils/excelComponentIO';
 import { saveCustomComponent } from '../utils/customComponentStorage';
 import { 
   X, Check, Sparkles, Box, Sliders, Zap, Tag, Euro, Ruler, Palette, 
-  Layers, AlertCircle, Info, Plus, Copy, Eye
+  Layers, AlertCircle, Info, Plus, Copy, Eye, FileCode, Trash2 
 } from 'lucide-react';
+import { ComponentSvgPickerModal } from './ComponentSvgPickerModal';
+import { svgToDataUri } from '../utils/componentSvgLibrary';
 
 interface CustomComponentModalProps {
   isOpen: boolean;
@@ -73,6 +75,10 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
   const [terminalsSummary, setTerminalsSummary] = useState(initialItem?.terminalsSummary || '');
   const [estimatedPriceEur, setEstimatedPriceEur] = useState<string>(initialItem?.estimatedPriceEur !== undefined ? String(initialItem.estimatedPriceEur) : '15.00');
   const [color, setColor] = useState(initialItem?.color || '#334155');
+  const [customSvg, setCustomSvg] = useState<string | undefined>(initialItem?.customSvg);
+  const [svgFileName, setSvgFileName] = useState<string | undefined>(initialItem?.svgFileName);
+  const [svgAspectMode, setSvgAspectMode] = useState<'contain' | 'stretch'>(initialItem?.svgAspectMode || 'contain');
+  const [isSvgPickerOpen, setIsSvgPickerOpen] = useState(false);
   const [addImmediately, setAddImmediately] = useState(targetRailIndex !== undefined);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -100,6 +106,9 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
         setTerminalsSummary(initialItem.terminalsSummary || '');
         setEstimatedPriceEur(initialItem.estimatedPriceEur !== undefined ? String(initialItem.estimatedPriceEur) : '15.00');
         setColor(initialItem.color || CATEGORY_DEFINITIONS[initialItem.category || 'protection_ac']?.defaultColor || '#334155');
+        setCustomSvg(initialItem.customSvg);
+        setSvgFileName(initialItem.svgFileName);
+        setSvgAspectMode(initialItem.svgAspectMode || 'contain');
       } else {
         // Reset to default new component
         setName('');
@@ -122,6 +131,9 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
         setTerminalsSummary('1 (L-In), 3 (N-In) / 2 (L-Out), 4 (N-Out)');
         setEstimatedPriceEur('12.50');
         setColor('#334155');
+        setCustomSvg(undefined);
+        setSvgFileName(undefined);
+        setSvgAspectMode('contain');
       }
       setErrors([]);
     }
@@ -188,6 +200,9 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
       terminalsSummary: terminalsSummary.trim() || undefined,
       estimatedPriceEur: Math.max(0, Number(estimatedPriceEur) || 0),
       color: color || '#334155',
+      customSvg: customSvg || undefined,
+      svgFileName: svgFileName || undefined,
+      svgAspectMode: svgAspectMode || 'contain',
     };
 
     saveCustomComponent(itemToSave);
@@ -384,47 +399,63 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
                   </div>
 
                   {/* Component preview */}
-                  <div 
-                    className="relative z-10 rounded-md shadow-xl border flex flex-col justify-between p-2 transition-all duration-200"
-                    style={{
-                      backgroundColor: color,
-                      borderColor: 'rgba(255,255,255,0.25)',
-                      width: `${Math.min(Math.max(widthMm * 2.2, 50), 220)}px`,
-                      height: `${Math.min(Math.max(heightMm * 1.3, 70), 150)}px`,
-                    }}
-                  >
-                    {/* Top terminal area */}
-                    <div className="flex items-center justify-between border-b border-white/20 pb-1">
-                      <span className="text-[10px] font-mono font-bold text-amber-300 bg-black/40 px-1 rounded">
-                        {tagPrefix || 'Q'}?
-                      </span>
-                      <span className="text-[9px] font-mono text-white/70 truncate max-w-[80px]">
-                        {brand || 'Genérico'}
-                      </span>
+                  {customSvg ? (
+                    <div 
+                      className="relative z-10 rounded-md shadow-xl border border-sky-400/50 bg-slate-950 flex items-center justify-center p-1.5 overflow-hidden transition-all duration-200"
+                      style={{
+                        width: `${Math.min(Math.max(widthMm * 2.2, 50), 220)}px`,
+                        height: `${Math.min(Math.max(heightMm * 1.3, 70), 150)}px`,
+                      }}
+                    >
+                      <img
+                        src={svgToDataUri(customSvg)}
+                        alt="Gráfico SVG do Componente"
+                        className={`max-h-full max-w-full ${svgAspectMode === 'stretch' ? 'w-full h-full object-fill' : 'object-contain'}`}
+                      />
                     </div>
+                  ) : (
+                    <div 
+                      className="relative z-10 rounded-md shadow-xl border flex flex-col justify-between p-2 transition-all duration-200"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: 'rgba(255,255,255,0.25)',
+                        width: `${Math.min(Math.max(widthMm * 2.2, 50), 220)}px`,
+                        height: `${Math.min(Math.max(heightMm * 1.3, 70), 150)}px`,
+                      }}
+                    >
+                      {/* Top terminal area */}
+                      <div className="flex items-center justify-between border-b border-white/20 pb-1">
+                        <span className="text-[10px] font-mono font-bold text-amber-300 bg-black/40 px-1 rounded">
+                          {tagPrefix || 'Q'}?
+                        </span>
+                        <span className="text-[9px] font-mono text-white/70 truncate max-w-[80px]">
+                          {brand || 'Genérico'}
+                        </span>
+                      </div>
 
-                    {/* Middle info */}
-                    <div className="my-auto text-center px-1 overflow-hidden">
-                      <div className="text-[11px] font-bold text-white truncate drop-shadow-xs" title={name || 'Nome do Componente'}>
-                        {name || 'Novo Componente'}
-                      </div>
-                      <div className="text-[9px] font-mono text-white/80 truncate">
-                        {partNumber || category}
-                      </div>
-                      {ratedCurrentA && (
-                        <div className="text-[9px] font-mono text-emerald-300 font-bold mt-0.5">
-                          {ratedCurrentA}A {inputVoltage ? `| ${inputVoltage}` : ''}
+                      {/* Middle info */}
+                      <div className="my-auto text-center px-1 overflow-hidden">
+                        <div className="text-[11px] font-bold text-white truncate drop-shadow-xs" title={name || 'Nome do Componente'}>
+                          {name || 'Novo Componente'}
                         </div>
-                      )}
-                    </div>
+                        <div className="text-[9px] font-mono text-white/80 truncate">
+                          {partNumber || category}
+                        </div>
+                        {ratedCurrentA && (
+                          <div className="text-[9px] font-mono text-emerald-300 font-bold mt-0.5">
+                            {ratedCurrentA}A {inputVoltage ? `| ${inputVoltage}` : ''}
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Bottom DIN rail latch & specs */}
-                    <div className="border-t border-white/20 pt-1 flex items-center justify-between text-[8px] font-mono text-white/70">
-                      <span>{widthMm}mm</span>
-                      <span className="w-2 h-2 rounded-full bg-white/40"></span>
-                      <span>{estimatedPriceEur ? `${Number(estimatedPriceEur).toFixed(2)}€` : '0€'}</span>
+                      {/* Bottom DIN rail latch & specs */}
+                      <div className="border-t border-white/20 pt-1 flex items-center justify-between text-[8px] font-mono text-white/70">
+                        <span>{widthMm}mm</span>
+                        <span className="w-2 h-2 rounded-full bg-white/40"></span>
+                        <span>{estimatedPriceEur ? `${Number(estimatedPriceEur).toFixed(2)}€` : '0€'}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -455,6 +486,66 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
                     className="w-5 h-5 rounded-md border border-slate-700 cursor-pointer bg-transparent"
                   />
                 </div>
+              </div>
+
+              {/* Ficheiro SVG Personalizado */}
+              <div className="mt-3 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                    <FileCode className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Aparência SVG Vetorial</span>
+                  </span>
+                  {customSvg && (
+                    <span className="text-[9px] font-mono text-blue-400 bg-blue-950 px-1.5 py-0.5 rounded border border-blue-800">
+                      SVG Ativo
+                    </span>
+                  )}
+                </div>
+
+                {customSvg ? (
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-mono text-slate-300 truncate bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                      {svgFileName || 'Ficheiro .SVG anexado'}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsSvgPickerOpen(true)}
+                        className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-medium transition"
+                      >
+                        Alterar SVG
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSvgAspectMode(svgAspectMode === 'stretch' ? 'contain' : 'stretch')}
+                        className="py-1 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] border border-slate-700 transition"
+                        title="Alternar entre modo proporcional e esticar"
+                      >
+                        {svgAspectMode === 'stretch' ? 'Esticar' : 'Proporcional'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomSvg(undefined);
+                          setSvgFileName(undefined);
+                        }}
+                        className="py-1 px-2 bg-slate-800 hover:bg-red-950/60 hover:text-red-300 text-slate-400 rounded text-[11px] border border-slate-700 transition"
+                        title="Remover SVG"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSvgPickerOpen(true)}
+                    className="w-full py-1.5 px-2 bg-slate-900 hover:bg-slate-800 border border-blue-500/40 hover:border-blue-400 text-blue-300 hover:text-white rounded text-[11px] font-medium flex items-center justify-center gap-1.5 transition"
+                  >
+                    <FileCode className="w-3 h-3 text-blue-400" />
+                    <span>Carregar .SVG / Modelos</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -710,6 +801,32 @@ export const CustomComponentModal: React.FC<CustomComponentModalProps> = ({
         </div>
 
       </div>
+
+      {/* Modal de Escolha / Upload de SVG para Componente Personalizado */}
+      <ComponentSvgPickerModal
+        isOpen={isSvgPickerOpen}
+        onClose={() => setIsSvgPickerOpen(false)}
+        component={{
+          name: name ? `${name} (${brand})` : 'Novo Componente',
+          tag: tagPrefix || 'Q?',
+          widthMm: Number(widthMm) || 18,
+          heightMm: Number(heightMm) || 90,
+          depthMm: Number(depthMm) || 70,
+          customSvg: customSvg,
+          svgFileName: svgFileName,
+          svgAspectMode: svgAspectMode,
+        }}
+        onApplySvg={(svgContent, fileName, aspectMode) => {
+          setCustomSvg(svgContent);
+          setSvgFileName(fileName);
+          setSvgAspectMode(aspectMode || 'contain');
+        }}
+        onRemoveSvg={() => {
+          setCustomSvg(undefined);
+          setSvgFileName(undefined);
+          setSvgAspectMode('contain');
+        }}
+      />
     </div>
   );
 };

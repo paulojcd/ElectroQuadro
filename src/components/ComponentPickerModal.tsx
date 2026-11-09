@@ -102,8 +102,13 @@ const CATEGORY_TABS: CategoryOption[] = [
     id: 'motor_control',
     name: 'Comando de Motores & Contactores',
     icon: '⚙️',
-    badge: 'Contactores 24V/230V, Disjuntores-motor',
-    filter: (item) => item.category === 'motor_control',
+    badge: 'Contactores TeSys, Sirius, AF, Modulares, Inversores, Térmicos',
+    filter: (item) =>
+      item.category === 'motor_control' ||
+      item.name.toLowerCase().includes('contactor') ||
+      item.name.toLowerCase().includes('contator') ||
+      item.description.toLowerCase().includes('contactor') ||
+      item.description.toLowerCase().includes('contator'),
   },
   {
     id: 'plcs',
@@ -123,11 +128,15 @@ const CATEGORY_TABS: CategoryOption[] = [
 
 const BRAND_FILTERS = [
   { id: 'all', label: 'Todas as Marcas' },
-  { id: 'Genérico', label: '📦 Genérico / Outras Marcas', highlight: true },
+  { id: 'Schneider Electric', label: '🟢 Schneider (TeSys / Acti9)', highlight: true },
+  { id: 'Siemens', label: '🤖 Siemens (Sirius / S7)', highlight: true },
+  { id: 'ABB', label: '🔴 ABB (AF / Compact)' },
+  { id: 'Eaton', label: '⚙️ Eaton (DILM)' },
+  { id: 'Finder', label: '🔄 Finder (Relés & 22)' },
+  { id: 'Hager', label: '🏠 Hager (ESC / Modular)' },
+  { id: 'Legrand', label: '🔌 Legrand (Viking 3 / CX3)' },
   { id: 'Mean Well', label: '⚡ Mean Well' },
-  { id: 'Siemens', label: '🤖 Siemens' },
-  { id: 'Legrand', label: '🔌 Legrand (Viking 3)' },
-  { id: 'Finder', label: '🔄 Finder' },
+  { id: 'Genérico', label: '📦 Genérico / Outros' },
 ];
 
 const normalizeText = (text: string): string => {
@@ -137,14 +146,28 @@ const normalizeText = (text: string): string => {
     .toLowerCase();
 };
 
-const matchesSearch = (item: CatalogItem, query: string): boolean => {
+const matchesSearch = (
+  item: CatalogItem,
+  query: string,
+  target: 'all' | 'name' | 'brand' = 'all'
+): boolean => {
   if (!query || !query.trim()) return true;
   const q = normalizeText(query.trim());
   const terms = q.split(/\s+/).filter(Boolean);
-  
-  const targetText = normalizeText(
-    `${item.name} ${item.brand} ${item.partNumber} ${item.description || ''} ${item.series || ''} ${item.inputVoltage || ''} ${item.outputVoltage || ''} ${item.ratedCurrentA ? item.ratedCurrentA + 'a' : ''} ${item.category || ''}`
-  );
+
+  let targetText = '';
+  if (target === 'brand') {
+    targetText = normalizeText(`${item.brand} ${item.series || ''}`);
+  } else if (target === 'name') {
+    targetText = normalizeText(
+      `${item.name} ${item.partNumber} ${item.description || ''} ${item.series || ''}`
+    );
+  } else {
+    // 'all': Nome ou Fabricante (e código/descrição/categoria)
+    targetText = normalizeText(
+      `${item.name} ${item.brand} ${item.partNumber} ${item.description || ''} ${item.series || ''} ${item.inputVoltage || ''} ${item.outputVoltage || ''} ${item.ratedCurrentA ? item.ratedCurrentA + 'a' : ''} ${item.category || ''}`
+    );
+  }
 
   return terms.every((term) => targetText.includes(term));
 };
@@ -154,21 +177,31 @@ const HighlightedText: React.FC<{ text: string; query: string; className?: strin
     return <span className={className}>{text}</span>;
   }
   const q = normalizeText(query.trim());
-  const normalizedText = normalizeText(text);
-  const index = normalizedText.indexOf(q);
-  if (index === -1) {
+  const terms = q.split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return <span className={className}>{text}</span>;
+
+  // Safe regex escaping for all terms
+  const escapedTerms = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  try {
+    const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <span className={className}>
+        {parts.map((part, i) => {
+          const isMatch = terms.some((t) => normalizeText(t) === normalizeText(part));
+          return isMatch ? (
+            <mark key={i} className="bg-amber-400/30 text-amber-200 px-0.5 rounded font-bold">
+              {part}
+            </mark>
+          ) : (
+            part
+          );
+        })}
+      </span>
+    );
+  } catch {
     return <span className={className}>{text}</span>;
   }
-  const before = text.slice(0, index);
-  const match = text.slice(index, index + query.trim().length);
-  const after = text.slice(index + query.trim().length);
-  return (
-    <span className={className}>
-      {before}
-      <mark className="bg-amber-400/30 text-amber-200 px-0.5 rounded font-bold">{match}</mark>
-      {after}
-    </span>
-  );
 };
 
 const QUICK_SEARCH_CHIPS = [
@@ -199,12 +232,27 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
 
   // 1. All hooks unconditionally called at top level
   const [activeTab, setActiveTab] = useState<'catalog' | 'custom'>('catalog');
-  const [selectedCategory, setSelectedCategory] = useState<string>('generic');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedRail, setSelectedRail] = useState<number>(targetRailIndex);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchTarget, setSearchTarget] = useState<'all' | 'name' | 'brand'>('all');
   const [searchScope, setSearchScope] = useState<'all' | 'category'>('all');
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
+
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Dynamic list of all manufacturers present in the catalog with model counts
+  const availableBrands = useMemo(() => {
+    const brandsMap = new Map<string, number>();
+    allComponents.forEach((item) => {
+      const b = item.brand || 'Genérico';
+      brandsMap.set(b, (brandsMap.get(b) || 0) + 1);
+    });
+    return Array.from(brandsMap.entries())
+      .map(([brand, count]) => ({ brand, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [allComponents]);
 
   // Custom component creation form
   const [customName, setCustomName] = useState('');
@@ -217,39 +265,43 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
   const [customPrice, setCustomPrice] = useState('12.00');
   const [customDescription, setCustomDescription] = useState('');
 
-  // Synchronize target rail when opened or prop changes
+  // Synchronize target rail and auto-focus search input when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setSelectedRail(targetRailIndex);
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 60);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, targetRailIndex]);
 
   // Real-time matches across the entire catalog (independent of category)
   const globalMatches = useMemo(() => {
     if (!searchTerm.trim()) return allComponents;
-    return allComponents.filter((item) => matchesSearch(item, searchTerm));
-  }, [allComponents, searchTerm]);
+    return allComponents.filter((item) => matchesSearch(item, searchTerm, searchTarget));
+  }, [allComponents, searchTerm, searchTarget]);
 
   // Real-time matches within the currently active category
   const categoryMatches = useMemo(() => {
     if (!searchTerm.trim()) return [];
     return allComponents.filter((item) => {
-      if (!matchesSearch(item, searchTerm)) return false;
+      if (!matchesSearch(item, searchTerm, searchTarget)) return false;
       if (selectedCategory === 'all') return true;
       if (selectedCategory === 'custom') return customIdSet.has(item.catalogId);
       const catDef = CATEGORY_TABS.find((c) => c.id === selectedCategory);
       return catDef ? catDef.filter(item) : true;
     });
-  }, [allComponents, searchTerm, selectedCategory, customIdSet]);
+  }, [allComponents, searchTerm, searchTarget, selectedCategory, customIdSet]);
 
   // Filter items based on active criteria and search scope
   const filteredItems = useMemo(() => {
     const hasSearch = searchTerm.trim().length > 0;
 
     return allComponents.filter((item) => {
-      // 1. Search filter
+      // 1. Search filter by Nome ou Fabricante conforme searchTarget
       if (hasSearch) {
-        if (!matchesSearch(item, searchTerm)) return false;
+        if (!matchesSearch(item, searchTerm, searchTarget)) return false;
 
         // If user specifically chose to limit search to current category
         if (searchScope === 'category') {
@@ -274,7 +326,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
         }
       }
 
-      // 2. Brand filter
+      // 2. Brand / Fabricante filter
       if (selectedBrand !== 'all') {
         if (selectedBrand === 'Genérico' && item.brand !== 'Genérico') return false;
         if (selectedBrand !== 'Genérico' && item.brand !== selectedBrand) return false;
@@ -282,7 +334,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
 
       return true;
     });
-  }, [allComponents, customIdSet, searchTerm, searchScope, selectedBrand, selectedCategory]);
+  }, [allComponents, customIdSet, searchTerm, searchTarget, searchScope, selectedBrand, selectedCategory]);
 
   // Group items by series / family for clean visual scanning
   const groupedItems = useMemo(() => {
@@ -443,20 +495,27 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
         </div>
 
         {/* ====================================================================
-            2. REAL-TIME SEARCH BAR & QUICK FILTERS (Barra de Pesquisa em Tempo Real)
+            2. REAL-TIME SEARCH BAR & QUICK FILTERS (Barra de Pesquisa por Nome e Fabricante)
             ==================================================================== */}
         {activeTab === 'catalog' && (
           <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 space-y-2.5 shrink-0">
-            {/* Main Search Input Row */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            {/* Main Search Input Row with Field Target Toggle and Manufacturer Select */}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
               {/* Primary Search Input */}
               <div className="relative flex-1 group">
                 <Search className="w-4 h-4 text-blue-400 absolute left-3.5 top-3 pointer-events-none group-focus-within:text-blue-300 transition" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Pesquisar por nome, fabricante ou referência (ex: Siemens, NDR-120, C16, Borne, 24V, Relé, 6ES7)..."
+                  placeholder={
+                    searchTarget === 'name'
+                      ? 'Filtrar por nome do componente (ex: Contactor TeSys, Disjuntor C16, Fonte 24V, Borne Viking)...'
+                      : searchTarget === 'brand'
+                      ? 'Filtrar por fabricante / marca (ex: Siemens, Schneider, ABB, Eaton, Finder, Legrand, Mean Well)...'
+                      : 'Filtrar componentes por nome ou fabricante (ex: Siemens, Contactor, Schneider, C16, Borne, Mean Well)...'
+                  }
                   className="w-full bg-slate-900 border border-slate-700/80 hover:border-slate-600 focus:border-blue-500 rounded-xl pl-10 pr-24 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 transition shadow-inner font-sans"
                   autoComplete="off"
                   spellCheck={false}
@@ -468,64 +527,168 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setSearchTerm('')}
-                      className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
+                      className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition cursor-pointer"
                       title="Limpar pesquisa (Esc)"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                   {searchTerm.trim() && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-950 text-blue-300 border border-blue-800 font-bold hidden md:inline-block">
-                      {filteredItems.length} {filteredItems.length === 1 ? 'encontrado' : 'encontrados'}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-950 text-blue-300 border border-blue-800 font-bold hidden sm:inline-block">
+                      {filteredItems.length} {filteredItems.length === 1 ? 'resultado' : 'resultados'}
                     </span>
                   )}
                 </div>
               </div>
 
+              {/* Search Target Mode Selector: [ Tudo (Nome ou Fabricante) | Por Nome | Por Fabricante ] */}
+              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 text-xs">
+                <span className="text-[10px] font-bold text-slate-500 uppercase px-1.5 hidden xl:inline">
+                  Filtrar por:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchTarget('all')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1 cursor-pointer ${
+                    searchTarget === 'all'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Pesquisar tanto no Nome como no Fabricante"
+                >
+                  <Search className="w-3 h-3" />
+                  <span>Nome ou Fabricante</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchTarget('name')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1 cursor-pointer ${
+                    searchTarget === 'name'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Pesquisar apenas pelo Nome do componente ou modelo"
+                >
+                  <Tag className="w-3 h-3 text-sky-400" />
+                  <span>Nome</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchTarget('brand')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1 cursor-pointer ${
+                    searchTarget === 'brand'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Pesquisar apenas pelo Fabricante ou Marca"
+                >
+                  <Box className="w-3 h-3 text-amber-400" />
+                  <span>Fabricante</span>
+                </button>
+              </div>
+
+              {/* Dedicated Fabricante (Manufacturer) Dropdown Selector */}
+              <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 shrink-0 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">
+                  Fabricante:
+                </span>
+                <select
+                  value={selectedBrand}
+                  onChange={(e) => setSelectedBrand(e.target.value)}
+                  className="bg-transparent text-xs text-slate-200 font-semibold focus:outline-hidden cursor-pointer"
+                  title="Filtrar componentes por fabricante específico"
+                >
+                  <option value="all" className="bg-slate-900 text-slate-200">
+                    Todos os Fabricantes ({allComponents.length})
+                  </option>
+                  {availableBrands.map((b) => (
+                    <option key={b.brand} value={b.brand} className="bg-slate-900 text-slate-200">
+                      {b.brand} ({b.count})
+                    </option>
+                  ))}
+                </select>
+                {selectedBrand !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBrand('all')}
+                    className="p-0.5 text-slate-400 hover:text-white rounded cursor-pointer"
+                    title="Remover filtro de fabricante"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
               {/* Search Scope Switcher (All Catalog vs Current Category) */}
-              {searchTerm.trim().length > 0 && (
+              {searchTerm.trim().length > 0 && selectedCategory !== 'all' && (
                 <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 text-xs">
                   <button
                     type="button"
                     onClick={() => setSearchScope('all')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                    className={`px-2 py-1 rounded-lg font-semibold transition flex items-center gap-1 cursor-pointer ${
                       searchScope === 'all'
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
-                    title="Pesquisar em todo o catálogo de componentes"
+                    title="Pesquisar em todo o catálogo"
                   >
                     <Globe className="w-3 h-3" />
-                    <span>Todo o Catálogo</span>
-                    <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-black/30">
-                      {globalMatches.length}
-                    </span>
+                    <span>Catálogo Todo ({globalMatches.length})</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setSearchScope('category')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                    className={`px-2 py-1 rounded-lg font-semibold transition flex items-center gap-1 cursor-pointer ${
                       searchScope === 'category'
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
-                    title="Pesquisar apenas na categoria selecionada"
+                    title="Pesquisar apenas nesta categoria"
                   >
                     <Folder className="w-3 h-3" />
-                    <span>Nesta Categoria</span>
-                    <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-black/30">
-                      {categoryMatches.length}
-                    </span>
+                    <span>Nesta Categoria ({categoryMatches.length})</span>
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Quick Search Tags / Suggestions Chips Row */}
+            {/* Quick Filter Chips: Top Manufacturers & Popular Components */}
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin pb-0.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-400" /> Sugestões:
+                <Sparkles className="w-3 h-3 text-amber-400" /> Filtros Rápidos:
               </span>
+
+              {/* Manufacturer Quick Buttons */}
+              {availableBrands.slice(0, 7).map((b) => {
+                const isSelected = selectedBrand === b.brand;
+                return (
+                  <button
+                    key={b.brand}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedBrand('all');
+                      } else {
+                        setSelectedBrand(b.brand);
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition whitespace-nowrap border shrink-0 flex items-center gap-1 cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-500 font-bold shadow-xs'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{b.brand}</span>
+                    <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-black/40 text-slate-400">
+                      {b.count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <span className="text-slate-700 mx-1">|</span>
+
+              {/* Component Name Quick Chips */}
               {QUICK_SEARCH_CHIPS.map((chip) => {
                 const isActive = searchTerm.toLowerCase().includes(chip.query.toLowerCase());
                 return (
@@ -537,10 +700,11 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                         setSearchTerm('');
                       } else {
                         setSearchTerm(chip.query);
+                        setSearchTarget('all');
                         setSearchScope('all');
                       }
                     }}
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition whitespace-nowrap border shrink-0 ${
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition whitespace-nowrap border shrink-0 cursor-pointer ${
                       isActive
                         ? 'bg-blue-600 text-white border-blue-500 font-bold shadow-xs'
                         : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
@@ -550,14 +714,19 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                   </button>
                 );
               })}
-              {searchTerm && (
+
+              {(searchTerm || selectedBrand !== 'all') && (
                 <button
                   type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:bg-slate-800 transition whitespace-nowrap shrink-0 flex items-center gap-1"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedBrand('all');
+                    setSearchTarget('all');
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-medium text-amber-300 hover:text-white bg-amber-950/50 border border-amber-600/40 hover:bg-amber-900 transition whitespace-nowrap shrink-0 flex items-center gap-1 cursor-pointer"
                 >
                   <RotateCcw className="w-2.5 h-2.5" />
-                  <span>Limpar busca</span>
+                  <span>Limpar Filtros</span>
                 </button>
               )}
             </div>
@@ -565,7 +734,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
         )}
 
         {/* ====================================================================
-            3. SECONDARY CONTROLS BAR: Rail Destination & Brand Selector
+            3. SECONDARY CONTROLS BAR: Rail Destination & Active Filters Status
             ==================================================================== */}
         <div className="px-5 py-2 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
           {/* Target Rail Selector */}
@@ -579,7 +748,7 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                   key={idx}
                   type="button"
                   onClick={() => setSelectedRail(idx)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition cursor-pointer ${
                     selectedRail === idx
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -591,33 +760,38 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
             </div>
           </div>
 
-          {/* Brand Filter Strip */}
-          {activeTab === 'catalog' && (
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap mr-0.5 flex items-center gap-1">
-                <Filter className="w-3 h-3 text-blue-400" /> Marca:
+          {/* Active Filter Indicators */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-mono">
+              <strong className="text-slate-100">{filteredItems.length}</strong> {filteredItems.length === 1 ? 'componente disponível' : 'componentes disponíveis'}
+            </span>
+
+            {selectedBrand !== 'all' && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-sky-950 text-sky-300 border border-sky-800/80 flex items-center gap-1">
+                <span>Fabricante: {selectedBrand}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedBrand('all')}
+                  className="hover:text-white cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </span>
-              {BRAND_FILTERS.map((bf) => {
-                const isSelected = selectedBrand === bf.id;
-                return (
-                  <button
-                    key={bf.id}
-                    type="button"
-                    onClick={() => setSelectedBrand(bf.id)}
-                    className={`px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap transition flex items-center gap-1 ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : bf.highlight
-                        ? 'bg-slate-900 text-amber-300 hover:bg-slate-800 border border-amber-500/30'
-                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
-                    }`}
-                  >
-                    <span>{bf.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+            )}
+
+            {searchTerm && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-blue-950 text-blue-300 border border-blue-800/80 flex items-center gap-1">
+                <span>{searchTarget === 'name' ? 'Nome' : searchTarget === 'brand' ? 'Fabricante' : 'Pesquisa'}: "{searchTerm}"</span>
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="hover:text-white cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+          </div>
 
           {recentNotification && (
             <div className="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-800 px-2.5 py-1 rounded-lg">
@@ -715,8 +889,13 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                                 <span className="text-xs text-slate-300 font-semibold truncate">
                                   — <HighlightedText text={item.name} query={searchTerm} />
                                 </span>
-                                <span
-                                  className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedBrand(item.brand);
+                                  }}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded border transition hover:brightness-125 cursor-pointer ${
                                     item.brand === 'Genérico'
                                       ? 'bg-amber-950/60 text-amber-300 border-amber-800/80 font-bold'
                                       : item.brand === 'Mean Well'
@@ -725,11 +904,16 @@ export const ComponentPickerModal: React.FC<ComponentPickerModalProps> = ({
                                       ? 'bg-teal-950/60 text-teal-300 border-teal-800/80'
                                       : item.brand === 'Legrand'
                                       ? 'bg-orange-950/60 text-orange-300 border-orange-800/80'
+                                      : item.brand === 'Schneider Electric'
+                                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/80'
+                                      : item.brand === 'ABB'
+                                      ? 'bg-rose-950/60 text-rose-300 border-rose-800/80'
                                       : 'bg-slate-900 text-slate-400 border-slate-800'
                                   }`}
+                                  title={`Filtrar apenas por este fabricante: ${item.brand}`}
                                 >
                                   <HighlightedText text={item.brand} query={searchTerm} />
-                                </span>
+                                </button>
 
                                 {customIdSet.has(item.catalogId) && (
                                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 font-mono">

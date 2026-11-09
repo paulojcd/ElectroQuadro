@@ -47,7 +47,7 @@ export function saveProjectToLibrary(
   const updatedState: ProjectState = {
     ...project,
     config: updatedConfig,
-    glands: project.glands && project.glands.length > 0 
+    glands: project.glands !== undefined
       ? project.glands 
       : getDefaultGlands(project.config.widthMm, project.config.supplyVoltage?.includes('400V')),
   };
@@ -270,7 +270,7 @@ export function parseProjectJson(jsonString: string): {
     }
 
     // Ensure glands are defined
-    if (!stateCandidate.glands || !Array.isArray(stateCandidate.glands) || stateCandidate.glands.length === 0) {
+    if (stateCandidate.glands === undefined || !Array.isArray(stateCandidate.glands)) {
       stateCandidate.glands = getDefaultGlands(
         stateCandidate.config.widthMm || 600,
         stateCandidate.config.supplyVoltage?.includes('400V')

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Layers, Zap, FileSpreadsheet, ShieldAlert, FolderOpen, 
-  Settings, Activity, Save, Check, HardDrive, ChevronDown, FileText, Download, PlusCircle, Printer, BookOpen, Shield, Tag, Wrench, Maximize2, Folder, ShieldCheck, BarChart3, Sparkles, Table, Cpu, Layout 
+  Settings, Activity, Save, Check, HardDrive, ChevronDown, FileText, Download, PlusCircle, Printer, BookOpen, Shield, Tag, Wrench, Maximize2, Folder, ShieldCheck, BarChart3, Sparkles, Table, Cpu, Layout, Ruler 
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { AutoBackupState } from '../hooks/useAutoBackupOnIdle';
@@ -18,6 +18,7 @@ interface HeaderProps {
   onOpenIdMap?: () => void;
   onOpenCadExport?: () => void;
   onOpenPrintModal?: () => void;
+  onOpenDrillingTemplate?: () => void;
   onOpenSchematicPdf?: () => void;
   onOpenLabelPrint?: () => void;
   onOpenLibraryManager?: () => void;
@@ -50,6 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenIdMap,
   onOpenCadExport,
   onOpenPrintModal,
+  onOpenDrillingTemplate,
   onOpenSchematicPdf,
   onOpenLabelPrint,
   onOpenLibraryManager,
@@ -679,6 +681,23 @@ export const Header: React.FC<HeaderProps> = ({
                   <div>
                     <div className="font-semibold text-white">Relatório de Obra / Imprimir (A4)</div>
                     <div className="text-[10px] text-slate-400">Configurar cabeçalhos, notas e imprimir direto</div>
+                  </div>
+                </button>
+              )}
+
+              {onOpenDrillingTemplate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenu('none');
+                    onOpenDrillingTemplate();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-left text-amber-200 hover:text-white hover:bg-slate-800 transition bg-amber-950/20"
+                >
+                  <Ruler className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-amber-300">Gabarito de Furação (Cotas das Margens)</div>
+                    <div className="text-[10px] text-slate-400">Desenho técnico com medidas para as 4 margens (A4 / A3 / SVG)</div>
                   </div>
                 </button>
               )}

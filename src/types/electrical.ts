@@ -9,7 +9,8 @@ export type ComponentCategory =
   | 'safety_relays'       // Relés de Segurança, Paragem de Emergência
   | 'terminals'           // Réguas de Bornes (Viking 3 Legrand, Weidmüller)
   | 'residential_modular' // Aparelhagem Residencial Modular (Campainhas, Telerruptores, Minuterias, Relés Horários, Contactores Dia/Noite, Pentes)
-  | 'accessories';        // Tomadas DIN, Descarregadores SPD
+  | 'accessories'        // Tomadas DIN, Descarregadores SPD
+  | 'enclosure';         // Quadros, Armários e Caixas de Distribuição Elétrica
 
 export interface ElectricalComponent {
   id: string; // unique instance id in project
@@ -18,6 +19,7 @@ export interface ElectricalComponent {
   name: string;
   brand: string; // e.g. "Mean Well", "Siemens", "Legrand", "Genérico", "Hager", "ABB", "Chint", "Eaton", etc.
   partNumber: string;
+  series?: string; // e.g. "NDR", "S7-1200", "LOGO! 8", "TeSys D"
   category: ComponentCategory;
   description: string;
   widthMm: number; // exact width in millimeters
@@ -50,6 +52,11 @@ export interface ElectricalComponent {
   estimatedPriceEur: number;
   color?: string; // visual tint
   customNotes?: string;
+
+  // Visual appearance & SVG file graphic
+  customSvg?: string; // Conteúdo raw SVG (<svg ...>...</svg>) ou data URL / URI do ficheiro SVG
+  svgAspectMode?: 'contain' | 'stretch'; // Modo de ajuste proporcional ao tamanho WxH
+  svgFileName?: string; // Nome do ficheiro .svg carregado pelo utilizador
 }
 
 export interface CatalogItem extends Omit<ElectricalComponent, 'id' | 'tag'> {
@@ -99,6 +106,27 @@ export type IkRating = 'IK02' | 'IK05' | 'IK07' | 'IK08' | 'IK09' | 'IK10';
 
 export type EnclosureMaterial = 'sheet_steel' | 'stainless_steel' | 'polyester' | 'thermoplastic' | 'aluminium';
 
+export interface EnclosureModel {
+  id: string;
+  name: string;
+  brand: string;
+  partNumber: string;
+  series?: string;
+  widthMm: number;
+  heightMm: number;
+  depthMm: number;
+  ipRating: 'IP20' | 'IP30' | 'IP31' | 'IP40' | 'IP44' | 'IP54' | 'IP55' | 'IP65' | 'IP66' | 'IP67' | 'IP68';
+  ikRating?: IkRating;
+  material: EnclosureMaterial;
+  doorType?: 'solid' | 'transparent' | 'double_door' | 'none';
+  mountingPlateIncluded?: boolean;
+  recommendedRails?: number;
+  maxDinModules?: number;
+  estimatedPriceEur: number;
+  description: string;
+  isCustom?: boolean;
+}
+
 export interface EnclosureConfig {
   name: string;
   projectCode: string;
@@ -122,6 +150,11 @@ export interface EnclosureConfig {
   railCount: number;
   notes?: string; // Observações / Notas gerais do projeto
   projectNotes?: ProjectNotesConfig; // Notas técnicas estruturadas para o relatório
+  // Modelo e custo do quadro como componente reaproveitável
+  enclosureModel?: EnclosureModel;
+  enclosurePriceEur?: number;
+  enclosureBrand?: string;
+  enclosurePartNumber?: string;
 }
 
 export type GlandMetric = 'M12' | 'M16' | 'M20' | 'M25' | 'M32' | 'M40' | 'M50';
@@ -155,6 +188,7 @@ export type ControlPanelDeviceType =
   | 'pushbutton'       // Botão de Pressão 22mm (Arrancar, Parar, Reset)
   | 'emergency_stop'   // Paragem de Emergência Cogumelo 40mm com anel amarelo
   | 'selector'         // Seletor Rotativo 22mm (Man/Auto, 3 Posições, Chave)
+  | 'toggle_switch'    // Switch / Interruptor de Alavanca (2/3 Posições, Tampa de Segurança)
   | 'pilot_light'      // Sinalizador LED 22mm (Verde, Vermelho, Branco, Âmbar)
   | 'meter'            // Instrumento Digital de Painel (Voltímetro, Multímetro 96x96 / 72x72)
   | 'buzzer';          // Sinalizador Acústico / Alarme Sonoro 22mm

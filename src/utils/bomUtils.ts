@@ -1,6 +1,7 @@
 import { ProjectState } from '../types/electrical';
 import { GLAND_SPECS } from './glandUtils';
 import { calculateComponentWireRecommendation } from './wireCalculations';
+import { getDefaultEnclosurePrice } from '../data/enclosureCatalog';
 
 export interface ConsolidatedBomItem {
   key: string;
@@ -21,6 +22,62 @@ export interface ConsolidatedBomItem {
 
 export function getConsolidatedBom(project: ProjectState): ConsolidatedBomItem[] {
   const map = new Map<string, ConsolidatedBomItem>();
+
+  // 1. Enclosure as a component (Quadro / Armário Elétrico reaproveitável)
+  const encModel = project.config.enclosureModel;
+  const encBrand = encModel?.brand || project.config.enclosureBrand || 'Schneider Electric';
+  const encPartNumber = encModel?.partNumber || project.config.enclosurePartNumber || `NSYS3D${Math.round(project.config.heightMm / 10)}${Math.round(project.config.widthMm / 10)}${Math.round(project.config.depthMm / 10)}P`;
+  const encName = encModel?.name || `Quadro Elétrico ${project.config.widthMm}×${project.config.heightMm}×${project.config.depthMm}mm (${project.config.ipRating || 'IP66'})`;
+  const encPrice = project.config.enclosurePriceEur !== undefined 
+    ? project.config.enclosurePriceEur 
+    : encModel?.estimatedPriceEur !== undefined 
+    ? encModel.estimatedPriceEur 
+    : getDefaultEnclosurePrice(project.config.widthMm, project.config.heightMm, project.config.depthMm, project.config.enclosureMaterial);
+  const encDesc = encModel?.description || `Armário industrial monobloco ${project.config.widthMm}×${project.config.heightMm}×${project.config.depthMm}mm, estanquidade ${project.config.ipRating || 'IP66'}, IK10, com placa de montagem zincada incluída`;
+
+  map.set(encPartNumber, {
+    key: `ENC-${encPartNumber}`,
+    partNumber: encPartNumber,
+    name: encName,
+    brand: encBrand,
+    category: 'enclosure',
+    description: encDesc,
+    tags: ['QD1'],
+    widthMm: project.config.widthMm,
+    quantity: 1,
+    unitPriceEur: encPrice,
+    totalPriceEur: encPrice,
+  });
+
+  // 2. Door Control Panel Devices (HMI, Botões 22mm, Emergência, Switches Alavanca)
+  if (project.controlPanel && project.controlPanel.devices) {
+    project.controlPanel.devices.forEach((dev) => {
+      const key = `CP-${dev.partNumber || dev.tag || dev.name}`;
+      const price = dev.priceEur || 15.0;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          partNumber: dev.partNumber || `DEV-${dev.tag}`,
+          name: dev.name,
+          brand: dev.brand || 'Schneider Harmony',
+          category: dev.type === 'hmi' ? 'hmi' : 'accessories',
+          description: `Aparelho de porta: ${dev.name} [Furação Ø${dev.holeDiameterMm || dev.widthMm}mm]`,
+          tags: [dev.tag],
+          widthMm: dev.widthMm,
+          quantity: 1,
+          unitPriceEur: price,
+          totalPriceEur: price,
+        });
+      } else {
+        const existing = map.get(key)!;
+        existing.quantity += 1;
+        existing.totalPriceEur += price;
+        if (!existing.tags.includes(dev.tag)) {
+          existing.tags.push(dev.tag);
+        }
+      }
+    });
+  }
 
   project.rails.forEach((rail) => {
     rail.items.forEach((item) => {

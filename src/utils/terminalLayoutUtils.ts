@@ -151,8 +151,26 @@ export function getComponentTerminals(
     return anchors;
   }
 
-  // 5. Relays, Contactors & Safety Relays
-  if (category === 'relays' || category === 'motor_control' || category === 'safety_relays') {
+  // 5. Motor Control & Industrial Power Contactors (3P + Aux + Coil)
+  if (category === 'motor_control') {
+    // Top Power Terminals: 1/L1, 3/L2, 5/L3 + Aux 13 + Coil A1
+    addAnchor('1/L1', '1/L1', itW * 0.18, true, 'ac_phase', 2.5, 'Linha L1 Entrada');
+    addAnchor('3/L2', '3/L2', itW * 0.38, true, 'ac_phase', 2.5, 'Linha L2 Entrada');
+    addAnchor('5/L3', '5/L3', itW * 0.58, true, 'ac_phase', 2.5, 'Linha L3 Entrada');
+    addAnchor('13', '13 (NA)', itW * 0.78, true, 'control_signal', 1.5, 'Contacto Auxiliar NA');
+    addAnchor('A1', 'A1', itW * 0.92, true, 'control_signal', 0.75, 'Bobina Contactor A1 (+ / Linha)');
+
+    // Bottom Motor Terminals: 2/T1, 4/T2, 6/T3 + Aux 14 + Coil A2
+    addAnchor('2/T1', '2/T1', itW * 0.18, false, 'ac_phase', 2.5, 'Motor T1 Saída');
+    addAnchor('4/T2', '4/T2', itW * 0.38, false, 'ac_phase', 2.5, 'Motor T2 Saída');
+    addAnchor('6/T3', '6/T3', itW * 0.58, false, 'ac_phase', 2.5, 'Motor T3 Saída');
+    addAnchor('14', '14 (NA)', itW * 0.78, false, 'control_signal', 1.5, 'Contacto Auxiliar NA');
+    addAnchor('A2', 'A2', itW * 0.92, false, 'dc_negative', 0.75, 'Bobina Contactor A2 (- / Neutro)');
+    return anchors;
+  }
+
+  // 6. Relays & Safety Relays
+  if (category === 'relays' || category === 'safety_relays') {
     // Top: Coil A1 & NO Contact In
     addAnchor('A1', 'A1', itW * 0.28, true, 'control_signal', 0.75, 'Bobina Relé A1 (+ / Linha)');
     addAnchor('13', '13 (NA)', itW * 0.72, true, 'control_signal', 1.5, 'Contacto Normal Aberto Entrada');

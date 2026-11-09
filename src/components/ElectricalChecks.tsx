@@ -4,7 +4,7 @@ import { calculatePowerBalance, runEngineeringValidations, isResidentialProject 
 import { verifyEnclosureIpIk } from '../utils/ipIkVerification';
 import { 
   ShieldAlert, ShieldCheck, Zap, AlertTriangle, Info, Home, 
-  Cpu, Layers, Shield, BookOpen, Compass, Droplets, Hammer, Sparkles, ArrowRight 
+  Cpu, Layers, Shield, BookOpen, Compass, Droplets, Hammer, Sparkles, ArrowRight, Award 
 } from 'lucide-react';
 
 interface ElectricalChecksProps {
@@ -13,6 +13,7 @@ interface ElectricalChecksProps {
   onOpenIpIkVerification?: () => void;
   onOpenComplianceDocs?: () => void;
   onOpenIecAssistant?: () => void;
+  onExportTechnicalReportPdf?: () => void;
   onUpdateConfig?: (newConfig: EnclosureConfig) => void;
 }
 
@@ -22,6 +23,7 @@ export const ElectricalChecks: React.FC<ElectricalChecksProps> = ({
   onOpenIpIkVerification,
   onOpenComplianceDocs,
   onOpenIecAssistant,
+  onExportTechnicalReportPdf,
   onUpdateConfig,
 }) => {
   const balance = calculatePowerBalance(project);
@@ -118,11 +120,10 @@ export const ElectricalChecks: React.FC<ElectricalChecksProps> = ({
             <button
               type="button"
               onClick={onOpenComplianceDocs}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-700/60 rounded-lg text-xs font-semibold text-indigo-300 transition"
-              title="Consultar manual normativo de conformidades RTIEBT / EN 61439"
+              className="h-8 w-8 flex items-center justify-center bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-700/60 rounded-lg text-indigo-300 transition"
+              title="Manual Normativo: Consultar documentação técnica RTIEBT / EN 61439"
             >
-              <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Manual Normativo</span>
+              <BookOpen className="w-4 h-4 text-indigo-400" />
             </button>
           )}
 
@@ -130,11 +131,21 @@ export const ElectricalChecks: React.FC<ElectricalChecksProps> = ({
             <button
               type="button"
               onClick={onOpenIpIkVerification}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-950/60 hover:bg-sky-900 border border-sky-700/60 rounded-lg text-xs font-semibold text-sky-300 transition"
-              title="Abrir ferramenta de verificação de grau de proteção IP e impactos IK"
+              className="h-8 w-8 flex items-center justify-center bg-sky-950/60 hover:bg-sky-900 border border-sky-700/60 rounded-lg text-sky-300 transition"
+              title="Verificar Grau de Proteção IP e Impactos IK"
             >
-              <Shield className="w-3.5 h-3.5 text-sky-400" />
-              <span>Verificar IP / IK</span>
+              <Shield className="w-4 h-4 text-sky-400" />
+            </button>
+          )}
+
+          {onExportTechnicalReportPdf && (
+            <button
+              type="button"
+              onClick={onExportTechnicalReportPdf}
+              className="h-8 w-8 flex items-center justify-center bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 border border-sky-400/40 rounded-lg text-white shadow-xs transition"
+              title="Exportar Relatório Técnico Completo (PDF): Conformidade EN 61439, BOM e Balanço"
+            >
+              <Award className="w-4 h-4 text-amber-300" />
             </button>
           )}
 

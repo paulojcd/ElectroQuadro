@@ -4,7 +4,7 @@ import {
   Box, Wind, FileText, Zap, RotateCcw, Activity, Tag, 
   Sliders, Table, Download, FileSpreadsheet, Printer, 
   FileCode, Shield, ZoomIn, ZoomOut, Maximize2, ChevronUp, ChevronDown, Check, Save, Cpu, Layout, DoorClosed,
-  Settings, BarChart3, ShieldAlert, ShieldCheck, HardDrive, PlusCircle, BookOpen, Scissors, CheckCircle
+  Settings, BarChart3, ShieldAlert, ShieldCheck, HardDrive, PlusCircle, BookOpen, Scissors, CheckCircle, Award
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { AutoBackupState } from '../hooks/useAutoBackupOnIdle';
@@ -85,12 +85,14 @@ export interface OfficeRibbonToolbarProps {
 
   // Export Tab actions
   onExportSvg: () => void;
+  onExportTechnicalReportPdf?: () => void;
   onOpenSchematicPdf?: () => void;
   onExportUnifilarPdf?: () => void;
   onExportBomExcel?: () => void;
   onOpenPrintModal?: () => void;
   onOpenLabelPrint?: () => void;
   onOpenCadExport?: () => void;
+  onOpenDrillingTemplate?: () => void;
 
   // Standards / Tools actions
   onOpenIecAssistant?: () => void;
@@ -167,12 +169,14 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
   onQuickExportWiringCsv,
 
   onExportSvg,
+  onExportTechnicalReportPdf,
   onOpenSchematicPdf,
   onExportUnifilarPdf,
   onExportBomExcel,
   onOpenPrintModal,
   onOpenLabelPrint,
   onOpenCadExport,
+  onOpenDrillingTemplate,
 
   onOpenIecAssistant,
   onOpenWireCalc,
@@ -655,158 +659,147 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                   <button
                     type="button"
                     onClick={onOpenCatalog}
-                    className="h-7 flex items-center gap-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-bold shadow-xs transition active:scale-98"
-                    title="Inserir componente a partir do catálogo técnico"
+                    className="h-7.5 w-8 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-md shadow-xs transition active:scale-95 cursor-pointer"
+                    title="Inserir Componente: Abrir catálogo técnico completo para seleção"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Inserir</span>
+                    <Plus className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onAddRail}
                     disabled={!canAddRail}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-200 hover:text-white rounded text-[11px] font-medium transition disabled:opacity-40"
-                    title="Adicionar nova Calha DIN 35mm"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 border border-slate-750 text-sky-400 hover:text-white rounded-md transition disabled:opacity-40 cursor-pointer active:scale-95"
+                    title={`Adicionar Nova Calha DIN 35mm (${railsCount}/8 calhas instaladas)`}
                   >
-                    <Layers className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Nova Calha ({railsCount}/8)</span>
+                    <Layers className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onOpenGlands}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 border border-slate-750 text-amber-300 hover:text-white rounded text-[11px] font-medium transition"
-                    title="Furação e bucins de entrada/saída de cabos"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 border border-slate-750 text-amber-300 hover:text-white rounded-md transition cursor-pointer active:scale-95"
+                    title={`Furação e Bucins de Entrada/Saída de Cabos (${glandsCount} bucins configurados)`}
                   >
-                    <Wrench className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Bucins ({glandsCount})</span>
+                    <Wrench className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Componentes & Calhas
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Calhas
                 </span>
               </div>
 
-              {/* Grupo: Porta Frontal & HMI (Acesso Direto sem Dropdown Preso) */}
+              {/* Grupo: Porta Frontal & HMI */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onOpenControlPanel}
-                    className="h-7 flex items-center gap-1.5 px-2.5 bg-purple-950/70 hover:bg-purple-900 border border-purple-500/50 text-purple-200 hover:text-white rounded text-[11px] font-bold transition shadow-xs group"
-                    title="Abrir editor da porta frontal: Ecrãs HMI, botões 22mm e tabela de furação CNC"
+                    className="h-7.5 w-8 flex items-center justify-center bg-purple-950/70 hover:bg-purple-900 border border-purple-500/50 text-purple-200 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                    title="Editor da Porta: Painel frontal, ecrãs HMI, botões 22mm e cotas CNC"
                   >
-                    <Layout className="w-3.5 h-3.5 text-purple-400 group-hover:scale-105 transition-transform" />
-                    <span>Editor da Porta</span>
+                    <Layout className="w-4 h-4 text-purple-400" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onToggleHmiDoorOverlay}
-                    className={`h-7 flex items-center gap-1.5 px-2 rounded text-[11px] transition ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition cursor-pointer active:scale-95 ${
                       showHmiDoorOverlay
-                        ? 'bg-purple-600 text-white shadow-xs font-bold ring-1 ring-purple-300'
-                        : 'bg-slate-850 hover:bg-slate-800 border border-purple-600/40 text-purple-300 hover:text-white font-medium'
+                        ? 'bg-purple-600 text-white shadow-xs ring-1 ring-purple-300'
+                        : 'bg-slate-850 hover:bg-slate-800 border border-purple-600/40 text-purple-300 hover:text-white'
                     }`}
-                    title="Alternar sobreposição gráfica da porta e cotas de furação da HMI no interior"
+                    title={showHmiDoorOverlay ? 'Furação HMI na Porta: LIGADA (clique para ocultar)' : 'Furação HMI na Porta: DESLIGADA (clique para sobrepor no interior)'}
                   >
-                    <DoorClosed className={`w-3.5 h-3.5 ${showHmiDoorOverlay ? 'text-white' : 'text-purple-400'}`} />
-                    <span>{showHmiDoorOverlay ? 'Furação HMI: LIGADA' : 'Furação HMI'}</span>
+                    <DoorClosed className={`w-4 h-4 ${showHmiDoorOverlay ? 'text-white' : 'text-purple-400'}`} />
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-purple-400 block text-center mt-0.5">
+                <span className="text-[8px] uppercase tracking-wider font-bold text-purple-400 block text-center mt-0.5">
                   Porta & HMI
                 </span>
               </div>
 
-              {/* Grupo: Alinhamento & Otimização */}
+              {/* Grupo: Alinhamento & Snap */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onToggleSnap}
-                    className={`h-7 flex items-center gap-1.5 px-2 rounded text-[11px] font-semibold transition border ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition border cursor-pointer active:scale-95 ${
                       snapToGrid
-                        ? 'bg-sky-600 text-white border-sky-400 shadow-xs'
+                        ? 'bg-sky-600 text-white border-sky-400 shadow-xs ring-1 ring-sky-300/40'
                         : 'bg-slate-850 hover:bg-slate-800 text-slate-400 border-slate-750'
                     }`}
-                    title="Alinhamento magnético com passo de 5mm"
+                    title={snapToGrid ? 'Snap Magnético 5mm: ATIVADO (clique para desligar)' : 'Snap Magnético 5mm: DESATIVADO (clique para ligar)'}
                   >
-                    <Magnet className={`w-3.5 h-3.5 ${snapToGrid ? 'text-amber-300' : 'text-slate-400'}`} />
-                    <span>Snap 5mm</span>
+                    <Magnet className={`w-4 h-4 ${snapToGrid ? 'text-amber-300' : 'text-slate-400'}`} />
                   </button>
 
                   <button
                     type="button"
                     onClick={onAlignAllRails}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white rounded text-[11px] font-medium transition border border-slate-750"
-                    title="Alinhar magneticamente todos os componentes a 5mm"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white rounded-md transition border border-slate-750 cursor-pointer active:scale-95"
+                    title="Alinhar Todos os Componentes magneticamente ao passo de 5mm"
                   >
-                    <Grid className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Alinhar Tudo</span>
+                    <Grid className="w-4 h-4 text-sky-400" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onOpenAutoLayout}
-                    className="h-7 flex items-center gap-1.5 px-2.5 bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 rounded text-[11px] font-bold transition shadow-xs"
-                    title="Auto-Layout: Reorganizar componentes com otimização térmica EN 61439"
+                    className="h-7.5 w-8 flex items-center justify-center bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 rounded-md transition shadow-xs relative cursor-pointer active:scale-95"
+                    title="Auto-Layout: Reorganização automática otimizada termicamente (EN 61439)"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Auto-Layout</span>
+                    <Sparkles className="w-4 h-4 text-blue-400" />
                     {thermalIssuesCount > 0 && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
                     )}
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Alinhamento & Snap
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Alinhamento
                 </span>
               </div>
 
-              {/* Grupo: Armário & Canaletas */}
+              {/* Grupo: Armário & Documentação */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onOpenEnclosureSize}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-sky-400 hover:text-sky-300 border border-slate-750 rounded text-[11px] font-mono transition"
-                    title="Ajustar dimensões do armário e canaletas"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-sky-400 hover:text-sky-300 border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                    title={`Dimensões do Armário: ${cabWidth}×${cabHeight}mm (Clique para editar invólucro e calhas)`}
                   >
-                    <Box className="w-3.5 h-3.5" />
-                    <span>{cabWidth}×{cabHeight}</span>
+                    <Box className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onToggleThermalZones}
-                    className={`h-7 flex items-center gap-1.5 px-2 rounded text-[11px] font-semibold transition border ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition border cursor-pointer active:scale-95 ${
                       showThermalZones
-                        ? 'bg-amber-600 text-white border-amber-400 shadow-xs'
+                        ? 'bg-amber-600 text-white border-amber-400 shadow-xs ring-1 ring-amber-300/40'
                         : 'bg-slate-850 hover:bg-slate-800 text-slate-400 border-slate-750'
                     }`}
-                    title="Exibir zonas térmicas recomendadas (EN 61439)"
+                    title={showThermalZones ? 'Zonas Térmicas EN 61439: VISÍVEIS (clique para ocultar)' : 'Zonas Térmicas EN 61439: OCULTAS (clique para mostrar)'}
                   >
-                    <Wind className={`w-3.5 h-3.5 ${showThermalZones ? 'text-white' : 'text-amber-400'}`} />
-                    <span>Zonas Térmicas</span>
+                    <Wind className={`w-4 h-4 ${showThermalZones ? 'text-white' : 'text-amber-400'}`} />
                   </button>
 
                   <button
                     type="button"
                     onClick={onOpenProjectNotes}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-emerald-400 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                    title="Caderno de encargos e notas do projeto"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-emerald-400 hover:text-white border border-slate-750 rounded-md transition relative cursor-pointer active:scale-95"
+                    title="Caderno de Encargos, Notas e Instruções de Montagem"
                   >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Notas</span>
+                    <FileText className="w-4 h-4" />
                     {hasProjectNotes && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     )}
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Armário & Zonas
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Armário
                 </span>
               </div>
             </>
@@ -817,67 +810,44 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
              ======================================================== */}
           {activeTab === 'control_panel' && (
             <>
-              {/* Grupo: Navegação da Porta */}
+              {/* Grupo: Navegação da Porta & Gabarito */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => onChangeTab('layout')}
-                    className="h-7 flex items-center gap-1.5 px-2.5 bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                    title="Voltar ao layout interior das calhas DIN"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                    title="Voltar ao Layout Interior das Calhas DIN"
                   >
-                    <Layers className="w-3.5 h-3.5 text-sky-400" />
-                    <span>← Ver Interior (Calhas)</span>
+                    <Layers className="w-4 h-4 text-sky-400" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onToggleHmiDoorOverlay}
-                    className={`h-7 flex items-center gap-1.5 px-2.5 rounded text-[11px] transition ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition cursor-pointer active:scale-95 ${
                       showHmiDoorOverlay
-                        ? 'bg-purple-600 text-white shadow-xs font-bold ring-1 ring-purple-300'
-                        : 'bg-purple-950/60 hover:bg-purple-900 border border-purple-600/40 text-purple-300 hover:text-white font-medium'
+                        ? 'bg-purple-600 text-white shadow-xs ring-1 ring-purple-300'
+                        : 'bg-purple-950/60 hover:bg-purple-900 border border-purple-600/40 text-purple-300 hover:text-white'
                     }`}
-                    title="Ativar sobreposição gráfica e verificação de colisão da porta sobre as calhas interiores"
+                    title={showHmiDoorOverlay ? 'Sobreposição no Interior: LIGADA (clique para ocultar)' : 'Ver Sobreposição e Colisão no Interior'}
                   >
-                    <DoorClosed className={`w-3.5 h-3.5 ${showHmiDoorOverlay ? 'text-white' : 'text-purple-400'}`} />
-                    <span>{showHmiDoorOverlay ? 'Sobreposição Interior: LIGADA' : 'Ver Sobreposição no Interior'}</span>
+                    <DoorClosed className={`w-4 h-4 ${showHmiDoorOverlay ? 'text-white' : 'text-purple-400'}`} />
                   </button>
-                </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Vistas do Quadro
-                </span>
-              </div>
 
-              {/* Grupo: Informações & Furação CNC */}
-              <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
-                <div className="flex items-center gap-1">
-                  {onOpenSchematicPdf && (
+                  {onOpenDrillingTemplate && (
                     <button
                       type="button"
-                      onClick={onOpenSchematicPdf}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-blue-600/30 hover:bg-blue-600 border border-blue-500/50 text-blue-200 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
-                      title="Gerar Dossiê Técnico Completo com página dedicada da Porta e Furação HMI"
+                      onClick={onOpenDrillingTemplate}
+                      className="h-7.5 w-8 flex items-center justify-center bg-amber-950/70 hover:bg-amber-900 border border-amber-500/50 text-amber-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Imprimir Gabarito / Template de Furações da Porta com Cotas para as Margens (A4 / A3 / SVG)"
                     >
-                      <FileText className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Exportar Dossier PDF (Porta)</span>
-                    </button>
-                  )}
-
-                  {onOpenCadExport && (
-                    <button
-                      type="button"
-                      onClick={onOpenCadExport}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Exportar furações CNC para ficheiro DXF / CAD"
-                    >
-                      <FileCode className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Furação DXF / CAD</span>
+                      <Ruler className="w-4 h-4 text-amber-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-purple-400 block text-center mt-0.5">
-                  Documentação & CNC
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Vistas & Furação
                 </span>
               </div>
             </>
@@ -893,112 +863,82 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      onToggleWiringMode();
-                    }}
-                    className={`h-7 flex items-center gap-1.5 px-2.5 rounded text-[11px] font-bold transition shadow-xs ${
+                    onClick={onToggleWiringMode}
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition cursor-pointer active:scale-95 ${
                       isWiringMode
                         ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 shadow-[0_0_8px_#f59e0b]'
-                        : 'bg-amber-950/60 hover:bg-amber-900 border border-amber-600/40 text-amber-300'
+                        : 'bg-amber-950/60 hover:bg-amber-900 border border-amber-600/40 text-amber-300 hover:text-white'
                     }`}
-                    title="Ligar condutores: clique num borne e arraste até ao destino"
+                    title={isWiringMode ? 'Modo Cablagem: ATIVO (Clique num borne e arraste)' : 'Modo Cablagem: Iniciar ligação ponto a ponto entre bornes'}
                   >
-                    <Zap className={`w-3.5 h-3.5 ${isWiringMode ? 'fill-slate-950 text-slate-950' : 'text-amber-400'}`} />
-                    <span>{isWiringMode ? '⚡ Modo Ligação ATIVO' : 'Ligar Condutores'}</span>
+                    <Zap className={`w-4 h-4 ${isWiringMode ? 'fill-slate-950 text-slate-950' : 'text-amber-400'}`} />
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={onResetWiresToDefault}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                    title="Repor cablagem padrão das regras de esquema"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Repor Padrão</span>
-                  </button>
-                </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Ferramentas de Ligação
-                </span>
-              </div>
-
-              {/* Grupo: Visualização & Traçado */}
-              <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
-                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onToggleWiring}
-                    className={`h-7 flex items-center gap-1.5 px-2 rounded text-[11px] font-semibold transition border ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition border cursor-pointer active:scale-95 ${
                       showWiring
-                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-xs'
+                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-xs ring-1 ring-emerald-300/40'
                         : 'bg-slate-850 hover:bg-slate-800 text-slate-400 border-slate-750'
                     }`}
-                    title="Ligar ou desligar visualização dos condutores"
+                    title={showWiring ? 'Condutores: VISÍVEIS (clique para ocultar)' : 'Condutores: OCULTOS (clique para mostrar)'}
                   >
-                    <Activity className={`w-3.5 h-3.5 ${showWiring ? 'text-white' : 'text-emerald-400'}`} />
-                    <span>{showWiring ? 'Fios: LIGADOS' : 'Fios: OCULTOS'}</span>
+                    <Activity className={`w-4 h-4 ${showWiring ? 'text-white' : 'text-emerald-400'}`} />
                   </button>
 
                   <button
                     type="button"
                     onClick={onToggleWireTags}
                     disabled={!showWiring}
-                    className={`h-7 flex items-center gap-1.5 px-2 rounded text-[11px] font-semibold transition border ${
+                    className={`h-7.5 w-8 flex items-center justify-center rounded-md transition border cursor-pointer active:scale-95 ${
                       showWireTags
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
                         : 'bg-slate-850 hover:bg-slate-800 text-slate-400 border-slate-750'
                     } disabled:opacity-40`}
-                    title="Mostrar anilhas e identificadores de condutores"
+                    title={showWireTags ? 'Anilhas de Fio (Marcadores): VISÍVEIS' : 'Anilhas de Fio: OCULTAS'}
                   >
-                    <Tag className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Anilhas</span>
+                    <Tag className="w-4 h-4 text-amber-400" />
                   </button>
 
                   <button
                     type="button"
                     onClick={onToggleWireRouteStyle}
                     disabled={!showWiring}
-                    className={`h-7 flex items-center gap-1.5 px-2.5 rounded text-[11px] font-semibold transition border ${
-                      wireRouteStyle === 'ducts'
-                        ? 'bg-purple-900/60 text-purple-300 border-purple-500/60 shadow-xs'
-                        : 'bg-slate-850 text-slate-300 border-slate-750'
-                    } disabled:opacity-40`}
-                    title="Alternar estilo: Manhattan Ortogonal (Canaletas com Curvas) ou Curvas Diretas"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95 disabled:opacity-40"
+                    title={`Estilo de Rota: ${wireRouteStyle === 'ducts' ? 'Ortogonal por Canaletas (Manhattan)' : 'Direto Ponto a Ponto'}`}
                   >
-                    <Sliders className="w-3.5 h-3.5 text-purple-400" />
-                    <span>{wireRouteStyle === 'ducts' ? 'Manhattan' : 'Direto'}</span>
+                    <Sliders className="w-4 h-4 text-purple-400" />
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Visualização & Roteamento
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Cablagem
                 </span>
               </div>
 
-              {/* Grupo: Engenharia & Listas */}
+              {/* Grupo: Gestão de Cabos */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onOpenWiringList}
-                    className="h-7 flex items-center gap-1.5 px-2.5 bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 text-white rounded text-[11px] font-bold transition shadow-xs border border-purple-500/50"
-                    title="Abrir Lista de Cablagem Detalhada (De-Para), cores EN 60204-1 e comprimentos"
+                    className="h-7.5 w-8 flex items-center justify-center bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 text-white rounded-md transition shadow-xs border border-purple-500/50 cursor-pointer active:scale-95"
+                    title="Caderno de Cablagem: Mapa detalhado de condutores (De-Para), cores e anilhas EN 60204-1"
                   >
-                    <Table className="w-3.5 h-3.5 text-purple-300" />
-                    <span>Lista Cabos (De-Para)</span>
+                    <Table className="w-4 h-4 text-purple-300" />
                   </button>
 
                   <button
                     type="button"
-                    onClick={onQuickExportWiringCsv}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-emerald-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                    title="Descarregar ficheiro CSV para Excel imediatamente"
+                    onClick={onResetWiresToDefault}
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-rose-400 hover:text-rose-300 border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                    title="Repor Cablagem Padrão (Auto-Router IEC)"
                   >
-                    <Download className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Exportar CSV</span>
+                    <RotateCcw className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Engenharia EN 60204-1
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Gestão
                 </span>
               </div>
             </>
@@ -1011,32 +951,17 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
             <>
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
-                  {onExportUnifilarPdf && (
-                    <button
-                      type="button"
-                      onClick={onExportUnifilarPdf}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
-                      title="Gerar Diagrama Elétrico Unifilar Completo (Norma IEC 60617)"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Descarregar Unifilar IEC (PDF)</span>
-                    </button>
-                  )}
-
-                  {onOpenSchematicPdf && (
-                    <button
-                      type="button"
-                      onClick={onOpenSchematicPdf}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-blue-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Dossiê Técnico com esquemas elétricos"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Dossiê Completo (PDF)</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={onExportUnifilarPdf}
+                    className="h-7.5 w-8 flex items-center justify-center bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded-md transition cursor-pointer active:scale-95"
+                    title="Descarregar Diagrama Elétrico Unifilar em PDF (Norma IEC 60617)"
+                  >
+                    <Zap className="w-4 h-4 text-emerald-400" />
+                  </button>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Diagramas & Exportação
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Diagrama
                 </span>
               </div>
             </>
@@ -1049,13 +974,15 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
             <>
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
-                  <div className="h-7 flex items-center gap-1.5 px-2.5 bg-emerald-950/50 border border-emerald-600/30 text-emerald-300 rounded text-[11px] font-medium">
-                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Simulação em Tempo Real Ativa</span>
+                  <div
+                    className="h-7.5 w-8 flex items-center justify-center bg-emerald-950/50 border border-emerald-600/30 text-emerald-300 rounded-md"
+                    title="Simulação Elétrica em Tempo Real Ativa"
+                  >
+                    <Activity className="w-4 h-4 text-emerald-400" />
                   </div>
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Estado do Circuito
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Simulação
                 </span>
               </div>
             </>
@@ -1072,11 +999,10 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onExportBomExcel}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
+                      className="h-7.5 w-8 flex items-center justify-center bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
                       title="Exportar Lista de Materiais BOM para Excel (.xlsx)"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Exportar Lista BOM (Excel)</span>
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                     </button>
                   )}
 
@@ -1084,38 +1010,47 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenLabelPrint}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Imprimir etiquetas de componentes"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-amber-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Imprimir Etiquetas de Componentes e Bornes DIN"
                     >
-                      <Tag className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Etiquetas DIN</span>
+                      <Tag className="w-4 h-4 text-amber-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Planilhas & Etiquetas
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Planilha
                 </span>
               </div>
             </>
           )}
 
           {/* ========================================================
-              TAB 7: EXPORTAÇÃO & RELATÓRIOS
+              TAB 7: EXPORTAÇÃO & RELATÓRIOS (HUB CENTRALIZADO DE EXPORTAÇÃO)
              ======================================================== */}
           {activeTab === 'export' && (
             <>
-              {/* Documentação Técnica PDF */}
+              {/* Grupo 1: Documentação & Relatórios PDF */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
+                  {onExportTechnicalReportPdf && (
+                    <button
+                      type="button"
+                      onClick={onExportTechnicalReportPdf}
+                      className="h-7.5 w-8 flex items-center justify-center bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 border border-sky-400/40 text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Relatório Técnico Oficial Consolidado em PDF (Norma EN 61439, Balanço 24V e BOM)"
+                    >
+                      <Award className="w-4 h-4 text-amber-300" />
+                    </button>
+                  )}
+
                   {onOpenSchematicPdf && (
                     <button
                       type="button"
                       onClick={onOpenSchematicPdf}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-blue-600/30 hover:bg-blue-600 border border-blue-500/50 text-blue-200 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
-                      title="Gerar Dossiê Técnico Completo em PDF (8 Folhas com carimbo, layout e esquemas)"
+                      className="h-7.5 w-8 flex items-center justify-center bg-blue-600/30 hover:bg-blue-600 border border-blue-500/50 text-blue-200 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Dossier Técnico Completo em PDF (8 Folhas com carimbo, layout e esquemas CAD)"
                     >
-                      <FileText className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Dossier Técnico (PDF 8 Folhas)</span>
+                      <FileText className="w-4 h-4 text-blue-400" />
                     </button>
                   )}
 
@@ -1123,11 +1058,10 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onExportUnifilarPdf}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded text-[11px] font-bold transition"
-                      title="Gerar Diagrama Elétrico Unifilar Completo (Norma IEC 60617)"
+                      className="h-7.5 w-8 flex items-center justify-center bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded-md transition cursor-pointer active:scale-95"
+                      title="Diagrama Elétrico Unifilar em PDF (Norma IEC 60617)"
                     >
-                      <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Unifilar IEC (PDF)</span>
+                      <Zap className="w-4 h-4 text-emerald-400" />
                     </button>
                   )}
 
@@ -1135,41 +1069,51 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenPrintModal}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Imprimir relatório técnico A4"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Imprimir Relatório Técnico A4"
                     >
-                      <Printer className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Imprimir A4</span>
+                      <Printer className="w-4 h-4 text-sky-400" />
+                    </button>
+                  )}
+
+                  {onOpenDrillingTemplate && (
+                    <button
+                      type="button"
+                      onClick={onOpenDrillingTemplate}
+                      className="h-7.5 w-8 flex items-center justify-center bg-amber-950/70 hover:bg-amber-900 border border-amber-500/50 text-amber-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Template de Furações: Desenho técnico com cotas e medidas para as margens para serralheiro (A4 / A3 / SVG)"
+                    >
+                      <Ruler className="w-4 h-4 text-amber-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Documentação Técnica (PDF)
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  PDF & Impressão
                 </span>
               </div>
 
-              {/* Planilhas & Dados (Excel / CSV) */}
+              {/* Grupo 2: Planilhas & Dados (Excel / CSV) */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={onOpenWiringList}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-purple-950/60 hover:bg-purple-900 border border-purple-600/40 text-purple-300 hover:text-white rounded text-[11px] font-bold transition"
-                    title="Exportar Lista de Cablagem De-Para com secções e cores"
-                  >
-                    <Table className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Lista Cabos (CSV)</span>
-                  </button>
-
                   {onExportBomExcel && (
                     <button
                       type="button"
                       onClick={onExportBomExcel}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded text-[11px] font-bold transition"
+                      className="h-7.5 w-8 flex items-center justify-center bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-600/40 text-emerald-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
                       title="Exportar Lista de Materiais BOM para Excel (.xlsx)"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Lista BOM (Excel)</span>
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                    </button>
+                  )}
+
+                  {onOpenWiringList && (
+                    <button
+                      type="button"
+                      onClick={onOpenWiringList}
+                      className="h-7.5 w-8 flex items-center justify-center bg-purple-950/60 hover:bg-purple-900 border border-purple-600/40 text-purple-300 hover:text-white rounded-md transition cursor-pointer active:scale-95"
+                      title="Exportar Lista de Cablagem / Fios (CSV)"
+                    >
+                      <Table className="w-4 h-4 text-purple-400" />
                     </button>
                   )}
 
@@ -1177,46 +1121,43 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenLabelPrint}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Gerar etiquetas para impressão física"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Imprimir Etiquetas de Componentes e Bornes DIN"
                     >
-                      <Tag className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Etiquetas</span>
+                      <Tag className="w-4 h-4 text-amber-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Planilhas & Dados
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Planilhas
                 </span>
               </div>
 
-              {/* Gráficos & CAD */}
+              {/* Grupo 3: Gráficos & CAD */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={onExportSvg}
-                    className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-blue-300 hover:text-white border border-slate-750 rounded text-[11px] font-semibold transition"
-                    title="Descarregar vetor SVG em alta definição do quadro"
+                    className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-blue-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                    title="Exportar Vetor SVG do Layout em Alta Resolução"
                   >
-                    <Download className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Exportar SVG</span>
+                    <Download className="w-4 h-4 text-blue-400" />
                   </button>
 
                   {onOpenCadExport && (
                     <button
                       type="button"
                       onClick={onOpenCadExport}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Exportar para DXF / CAD"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Exportar Furações CNC e Layout para DXF / CAD 2D"
                     >
-                      <FileCode className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>CAD / DXF</span>
+                      <FileCode className="w-4 h-4 text-indigo-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Gráficos & Vetores
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  CAD / SVG
                 </span>
               </div>
             </>
@@ -1227,18 +1168,17 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
              ======================================================== */}
           {activeTab === 'standards' && (
             <>
-              {/* Assistentes de Conformidade */}
+              {/* Grupo 1: Dimensionamento & Cálculos */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   {onOpenIecAssistant && (
                     <button
                       type="button"
                       onClick={onOpenIecAssistant}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-amber-950/60 hover:bg-amber-900 border border-amber-600/40 text-amber-300 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
-                      title="Assistente IEC 60898: Curvas B, C, D e calibre In para disjuntores"
+                      className="h-7.5 w-8 flex items-center justify-center bg-amber-950/60 hover:bg-amber-900 border border-amber-600/40 text-amber-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Assistente IEC 60898: Seleção de curvas B, C, D e calibres In de proteção"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Assistente IEC 60898</span>
+                      <Sparkles className="w-4 h-4 text-amber-400" />
                     </button>
                   )}
 
@@ -1246,11 +1186,10 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenWireCalc}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Dimensionamento de condutores e queda de tensão (EN 60204-1)"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Dimensionamento de Condutores e Queda de Tensão (EN 60204-1)"
                     >
-                      <Zap className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Cálculo Cabos</span>
+                      <Zap className="w-4 h-4 text-sky-400" />
                     </button>
                   )}
 
@@ -1258,31 +1197,29 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenIpIkVerification}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Verificador de proteção IP & IK (EN 60529 / 62262)"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-sky-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Verificador de Estanqueidade IP (EN 60529) e Impactos IK (EN 62262)"
                     >
-                      <Shield className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Verificador IP/IK</span>
+                      <Shield className="w-4 h-4 text-sky-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Dimensionamento & Cálculos
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Dimensionamento
                 </span>
               </div>
 
-              {/* Biblioteca & Normas */}
+              {/* Grupo 2: Catálogo & Documentação */}
               <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                 <div className="flex items-center gap-1">
                   {onOpenLibraryManager && (
                     <button
                       type="button"
                       onClick={onOpenLibraryManager}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Gerir biblioteca e catálogo Excel (.xlsx)"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Gerir Biblioteca de Componentes & Importar/Exportar Excel (.xlsx)"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Biblioteca & Excel</span>
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                     </button>
                   )}
 
@@ -1290,11 +1227,10 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenIdMap}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Mapa de identificação de circuitos para a porta"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Mapa de Identificação de Circuitos para Colar na Porta do Quadro"
                     >
-                      <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Placa Identificação</span>
+                      <FileText className="w-4 h-4 text-indigo-400" />
                     </button>
                   )}
 
@@ -1302,35 +1238,33 @@ export const OfficeRibbonToolbar: React.FC<OfficeRibbonToolbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenComplianceDocs}
-                      className="h-7 flex items-center gap-1.5 px-2 bg-slate-850 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-750 rounded text-[11px] font-medium transition"
-                      title="Manual de normas RTIEBT e EN 61439"
+                      className="h-7.5 w-8 flex items-center justify-center bg-slate-850 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-750 rounded-md transition cursor-pointer active:scale-95"
+                      title="Manual de Normas RTIEBT e EN 61439"
                     >
-                      <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Manual Normas</span>
+                      <BookOpen className="w-4 h-4 text-indigo-400" />
                     </button>
                   )}
                 </div>
-                <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                  Catálogo & Documentação
+                <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
+                  Catálogo
                 </span>
               </div>
 
-              {/* Standalone Windows .EXE */}
+              {/* Grupo 3: Standalone Windows .EXE */}
               {onOpenStandaloneGuide && (
                 <div className="flex flex-col pr-2 border-r border-slate-800 shrink-0">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={onOpenStandaloneGuide}
-                      className="h-7 flex items-center gap-1.5 px-2.5 bg-gradient-to-r from-emerald-950/80 to-slate-900 hover:from-emerald-900 border border-emerald-500/50 text-emerald-300 hover:text-white rounded text-[11px] font-bold transition shadow-xs"
-                      title="Transformar em .EXE executável e resolver arranque do ficheiro .bat"
+                      className="h-7.5 w-8 flex items-center justify-center bg-gradient-to-r from-emerald-950/80 to-slate-900 hover:from-emerald-900 border border-emerald-500/50 text-emerald-300 hover:text-white rounded-md transition shadow-xs cursor-pointer active:scale-95"
+                      title="Guia Executável Offline: Criar .EXE Windows autónomo sem dependências"
                     >
-                      <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Gerar Executável .EXE</span>
+                      <Cpu className="w-4 h-4 text-emerald-400" />
                     </button>
                   </div>
-                  <span className="text-[8.5px] uppercase tracking-wider font-bold text-slate-500 block text-center mt-0.5">
-                    Modo Offline
+                  <span className="text-[8px] uppercase tracking-wider font-bold text-emerald-400 block text-center mt-0.5">
+                    Offline
                   </span>
                 </div>
               )}

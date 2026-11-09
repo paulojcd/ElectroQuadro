@@ -126,90 +126,184 @@ export function getCategoryBadgeInfo(category: ComponentCategory): {
 }
 
 /**
- * Calculates estimated power consumption or thermal dissipation
+ * Formats power rating into a clean user-facing technical string
  */
-export function getComponentPowerConsumption(item: PlacedComponent): {
-  display: string;
-  isProvider?: boolean;
+export function getComponentPowerRating(item: PlacedComponent): {
+  primary: string;
+  context: string;
+  isProvider: boolean;
 } {
   const d = item.data;
 
-  // 1. Power Supply (Mean Well) -> Provides DC power
+  // 1. Power Supply (Mean Well) -> Provides power
   if (d.category === 'power_supply') {
     const w = d.ratedPowerW || (d.ratedCurrentA && d.outputVoltage?.includes('24') ? d.ratedCurrentA * 24 : 120);
     const a = d.ratedCurrentA || (w / 24);
     return {
-      display: `Fornece ${w} W (${a.toFixed(1)} A @ 24V DC)`,
+      primary: `${w} W`,
+      context: `Fornece ${a.toFixed(1)}A @ 24V DC`,
       isProvider: true,
     };
   }
 
-  // 2. PLC CPU (Siemens S7-1200 / LOGO!)
+  // 2. Motor Control & Contactors
+  if (d.category === 'motor_control') {
+    if (d.ratedPowerW) {
+      const kw = d.ratedPowerW >= 1000 ? `${(d.ratedPowerW / 1000).toFixed(1)} kW` : `${d.ratedPowerW} W`;
+      return {
+        primary: kw,
+        context: 'Capacidade AC-3 / 400V',
+        isProvider: false,
+      };
+    }
+    if (d.ratedCurrentA) {
+      // Approximate 3-phase motor power for AC-3: P = sqrt(3) * 400 * I * 0.85
+      const approxW = Math.round(Math.sqrt(3) * 400 * d.ratedCurrentA * 0.85);
+      const kw = (approxW / 1000).toFixed(1);
+      return {
+        primary: `${kw} kW`,
+        context: `Nominal AC-3 (${d.ratedCurrentA}A)`,
+        isProvider: false,
+      };
+    }
+  }
+
+  // 3. PLC CPU (Siemens S7-1200 / LOGO!)
   if (d.category === 'plc_cpu') {
-    const w = d.dcConsumptionW || 12;
-    const a = d.dcConsumptionA || 0.5;
+    const w = d.ratedPowerW || d.dcConsumptionW || 12;
     return {
-      display: `${w} W (${a.toFixed(2)} A @ 24V DC)`,
+      primary: `${w} W`,
+      context: 'Consumo CPU + I/O (24V DC)',
       isProvider: false,
     };
   }
 
-  // 3. PLC Expansion Module
+  // 4. PLC Expansion Module
   if (d.category === 'plc_expansion') {
-    const w = d.dcConsumptionW || 4.5;
-    const a = d.dcConsumptionA || 0.18;
+    const w = d.ratedPowerW || d.dcConsumptionW || 4.5;
     return {
-      display: `${w} W (${a.toFixed(2)} A @ 24V DC)`,
+      primary: `${w} W`,
+      context: 'Consumo Módulo (24V DC)',
       isProvider: false,
     };
   }
 
-  // 4. Protection AC (Disjuntor / Diferencial) -> Internal dissipation
+  // 5. Protection AC (Disjuntores / RCDs)
   if (d.category === 'protection_ac') {
     const inA = d.ratedCurrentA || 16;
-    // Estimated thermal dissipation per pole in AC breakers (IEC 60898 ~ 1.5W - 3.5W)
     const dissW = inA >= 25 ? 3.8 : inA >= 16 ? 2.6 : 1.8;
     return {
-      display: `Dissipação: ~${dissW} W (Calibre: ${inA} A)`,
+      primary: `~${dissW} W`,
+      context: 'Dissipação Térmica (IEC 60898)',
       isProvider: false,
     };
   }
 
-  // 5. Relays (Coil power)
+  // 6. Relays & Safety Relays
   if (d.category === 'relays' || d.category === 'safety_relays') {
     return {
-      display: '0.8 W (Bobina 24V DC)',
+      primary: '0.8 W',
+      context: 'Consumo Bobina (24V DC)',
       isProvider: false,
     };
   }
 
-  // 6. Terminals / Passagem
-  if (d.category === 'terminals') {
+  // 7. Generic Fallbacks
+  if (d.ratedPowerW) {
+    const kw = d.ratedPowerW >= 1000 ? `${(d.ratedPowerW / 1000).toFixed(1)} kW` : `${d.ratedPowerW} W`;
     return {
-      display: '< 0.1 W (Resistência de contacto)',
+      primary: kw,
+      context: 'Potência Nominal',
       isProvider: false,
     };
   }
 
-  // Fallback if specific wattage given
   if (d.dcConsumptionW) {
     return {
-      display: `${d.dcConsumptionW} W (${(d.dcConsumptionA || 0.1).toFixed(2)} A)`,
-      isProvider: false,
-    };
-  }
-
-  if (d.ratedPowerW) {
-    return {
-      display: `${d.ratedPowerW} W`,
+      primary: `${d.dcConsumptionW} W`,
+      context: 'Consumo 24V DC',
       isProvider: false,
     };
   }
 
   return {
-    display: '1.2 W (Estimado)',
+    primary: '-- W',
+    context: 'Passivo / Não aplicável',
     isProvider: false,
   };
+}
+
+/**
+ * Formats operating current rating into a clean user-facing technical string
+ */
+export function getComponentOperatingCurrent(item: PlacedComponent): {
+  primary: string;
+  context: string;
+} {
+  const d = item.data;
+
+  if (d.category === 'power_supply') {
+    const a = d.ratedCurrentA || 5.0;
+    return {
+      primary: `${a.toFixed(1)} A`,
+      context: 'Capacidade Saída 24V DC',
+    };
+  }
+
+  if (d.category === 'protection_ac' || d.category === 'protection_dc') {
+    const inA = d.ratedCurrentA || 16;
+    const curve = d.curve ? `Curva ${d.curve}` : '';
+    const poles = d.poles ? `${d.poles}` : '';
+    return {
+      primary: `${inA} A`,
+      context: [curve, poles, d.breakingCapacityKa ? `${d.breakingCapacityKa}kA` : ''].filter(Boolean).join(' · ') || 'Calibre Nominal',
+    };
+  }
+
+  if (d.category === 'motor_control') {
+    if (d.ratedCurrentA) {
+      return {
+        primary: `${d.ratedCurrentA} A`,
+        context: 'Corrente Operação (AC-3)',
+      };
+    }
+  }
+
+  if (d.ratedCurrentA) {
+    return {
+      primary: `${d.ratedCurrentA} A`,
+      context: 'Corrente Nominal (In)',
+    };
+  }
+
+  if (d.dcConsumptionA) {
+    return {
+      primary: `${d.dcConsumptionA.toFixed(2)} A`,
+      context: 'Corrente Consumida (24V DC)',
+    };
+  }
+
+  return {
+    primary: '-- A',
+    context: 'Sem carga nominal direta',
+  };
+}
+
+/**
+ * Returns brand badge color styles
+ */
+export function getBrandBadgeStyle(brand: string): string {
+  const b = brand.toLowerCase();
+  if (b.includes('siemens')) return 'bg-teal-950/90 text-teal-300 border-teal-600/70';
+  if (b.includes('schneider')) return 'bg-emerald-950/90 text-emerald-300 border-emerald-600/70';
+  if (b.includes('mean well') || b.includes('meanwell')) return 'bg-sky-950/90 text-sky-300 border-sky-600/70';
+  if (b.includes('legrand')) return 'bg-red-950/90 text-red-300 border-red-600/70';
+  if (b.includes('abb')) return 'bg-rose-950/90 text-rose-300 border-rose-600/70';
+  if (b.includes('eaton')) return 'bg-blue-950/90 text-blue-300 border-blue-600/70';
+  if (b.includes('hager')) return 'bg-orange-950/90 text-orange-300 border-orange-600/70';
+  if (b.includes('weidmuller') || b.includes('weidmüller') || b.includes('phoenix')) return 'bg-amber-950/90 text-amber-300 border-amber-600/70';
+  if (b.includes('finder')) return 'bg-indigo-950/90 text-indigo-300 border-indigo-600/70';
+  return 'bg-slate-850 text-slate-300 border-slate-700';
 }
 
 export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps> = ({
@@ -222,12 +316,14 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
   if (!item || !coords) return null;
 
   const badge = getCategoryBadgeInfo(item.data.category);
-  const power = getComponentPowerConsumption(item);
+  const power = getComponentPowerRating(item);
+  const current = getComponentOperatingCurrent(item);
+  const brandStyle = getBrandBadgeStyle(item.data.brand || '');
   const Icon = badge.Icon;
 
   // Tooltip dimensions for collision detection & positioning
-  const tooltipWidth = 320;
-  const tooltipHeight = 175;
+  const tooltipWidth = 330;
+  const tooltipHeight = 210;
   const offset = 14;
 
   // Calculate safe X and Y so tooltip stays within the container viewport
@@ -248,6 +344,15 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
     left = containerWidth - tooltipWidth - 16;
   }
 
+  // Also clamp vertically if placed below and exceeds container
+  if (isPlacedBelow && top + tooltipHeight > containerHeight - 16) {
+    top = Math.max(12, containerHeight - tooltipHeight - 16);
+  }
+
+  const voltageText = item.data.inputVoltage && item.data.outputVoltage
+    ? `${item.data.inputVoltage} ➔ ${item.data.outputVoltage}`
+    : item.data.inputVoltage || item.data.outputVoltage || '230V AC';
+
   return (
     <AnimatePresence>
       <motion.div
@@ -255,7 +360,7 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
         initial={{ opacity: 0, scale: 0.94, y: isPlacedBelow ? -6 : 6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: isPlacedBelow ? -4 : 4 }}
-        transition={{ duration: 0.14, ease: 'easeOut' }}
+        transition={{ duration: 0.12, ease: 'easeOut' }}
         style={{
           position: 'absolute',
           left: `${left}px`,
@@ -274,12 +379,14 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
             <span className="truncate max-w-[140px]">{badge.label}</span>
           </div>
 
-          {/* Component Tag & Brand */}
-          <div className="flex items-center gap-1.5 font-mono">
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-950 text-blue-300 border border-blue-700/80 font-bold">
+          {/* Component Tag & Fabricante Badge */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/80 font-bold">
               {item.tag}
             </span>
-            <span className="text-[10px] text-slate-400 font-medium">{item.data.brand}</span>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${brandStyle} truncate max-w-[110px]`}>
+              {item.data.brand || 'Genérico'}
+            </span>
           </div>
         </div>
 
@@ -288,53 +395,67 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
           <h4 className="text-xs font-bold text-white leading-snug truncate" title={item.data.name}>
             {item.data.name}
           </h4>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5 font-mono">
+            Ref: <span className="text-amber-300 font-bold">{item.data.partNumber || 'N/D'}</span>
+            {item.data.series ? ` · Série ${item.data.series}` : ''}
+          </p>
         </div>
 
-        {/* 3-Column Key Technical Parameters Grid */}
+        {/* 4 Key Technical Parameters Grid */}
         <div className="grid grid-cols-2 gap-2 px-3 pb-2 text-[11px]">
-          {/* Metric 1: Referência (Part Number) */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-1.5">
+          {/* Metric 1: Fabricante (Explicitly highlighted as requested) */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
-              <Tag className="w-2.5 h-2.5 text-amber-400" />
-              <span>Referência</span>
+              <Tag className="w-2.5 h-2.5 text-blue-400" />
+              <span>Fabricante</span>
             </div>
-            <div className="font-mono font-bold text-amber-300 text-[11px] truncate mt-0.5" title={item.data.partNumber}>
-              {item.data.partNumber || 'N/D'}
+            <div className="font-bold text-white text-[11px] truncate mt-0.5" title={item.data.brand}>
+              {item.data.brand || 'Genérico'}
+            </div>
+            <div className="text-[9px] text-slate-400 truncate">
+              {item.data.partNumber || 'Referência comercial'}
             </div>
           </div>
 
-          {/* Metric 2: Consumo / Potência */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-1.5">
+          {/* Metric 2: Potência Nominal (Explicitly highlighted as requested) */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
               <Flame className={`w-2.5 h-2.5 ${power.isProvider ? 'text-emerald-400' : 'text-orange-400'}`} />
-              <span>{power.isProvider ? 'Potência Útil' : 'Consumo'}</span>
+              <span>Potência Nominal</span>
             </div>
-            <div className="font-mono font-bold text-emerald-300 text-[11px] truncate mt-0.5">
-              {power.display}
+            <div className={`font-mono font-bold text-[11px] truncate mt-0.5 ${power.isProvider ? 'text-emerald-300' : 'text-orange-300'}`}>
+              {power.primary}
+            </div>
+            <div className="text-[9px] text-slate-400 truncate">
+              {power.context}
             </div>
           </div>
 
-          {/* Metric 3: Tipo / Tensão / Calibre */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-1.5">
+          {/* Metric 3: Corrente de Operação (Explicitly highlighted as requested) */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col justify-between">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
-              <Zap className="w-2.5 h-2.5 text-sky-400" />
-              <span>Especificação</span>
+              <Activity className="w-2.5 h-2.5 text-sky-400" />
+              <span>Corrente de Operação</span>
+            </div>
+            <div className="font-mono font-bold text-sky-300 text-[11px] truncate mt-0.5">
+              {current.primary}
+            </div>
+            <div className="text-[9px] text-slate-400 truncate">
+              {current.context}
+            </div>
+          </div>
+
+          {/* Metric 4: Tensão de Serviço & Terminais */}
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 flex flex-col justify-between">
+            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
+              <Zap className="w-2.5 h-2.5 text-amber-400" />
+              <span>Tensão / Terminais</span>
             </div>
             <div className="font-medium text-slate-200 text-[11px] truncate mt-0.5">
-              {item.data.ratedCurrentA
-                ? `${item.data.poles || ''} ${item.data.curve || ''}${item.data.ratedCurrentA}A`
-                : item.data.outputVoltage || item.data.inputVoltage || 'Padrão DIN'}
+              {voltageText}
             </div>
-          </div>
-
-          {/* Metric 4: Dimensões Físicas */}
-          <div className="bg-slate-900/80 border border-slate-800/80 rounded-lg p-1.5">
-            <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
-              <Box className="w-2.5 h-2.5 text-indigo-400" />
-              <span>Dimensões</span>
-            </div>
-            <div className="font-mono text-slate-200 text-[11px] truncate mt-0.5">
-              {item.data.widthMm}×{item.data.heightMm || 90}mm <span className="text-slate-400 text-[10px]">({item.data.dinModules}M)</span>
+            <div className="text-[9px] text-slate-400 truncate" title={item.data.terminalsSummary || 'Terminais padrão'}>
+              {item.data.terminalsSummary || `${item.data.widthMm}mm (${item.data.dinModules}M)`}
             </div>
           </div>
         </div>
@@ -343,9 +464,11 @@ export const ComponentTechnicalTooltip: React.FC<ComponentTechnicalTooltipProps>
         <div className="px-3 py-1.5 bg-slate-900/90 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
           <div className="flex items-center gap-1.5 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-            <span>Calha {railIndex + 1} (X: {Math.round(item.positionMm)}mm)</span>
+            <span>Calha {railIndex + 1} · X: {Math.round(item.positionMm)}mm</span>
+            <span className="text-slate-500">|</span>
+            <span>{item.data.widthMm}×{item.data.heightMm || 90}mm</span>
           </div>
-          <span className="text-slate-400 font-medium">Clique p/ editar</span>
+          <span className="text-slate-400 font-medium">Clique p/ selecionar</span>
         </div>
       </motion.div>
     </AnimatePresence>

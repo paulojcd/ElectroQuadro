@@ -101,6 +101,14 @@ export const CATEGORY_DEFINITIONS: Record<ComponentCategory, CategoryInfo> = {
     defaultColor: '#059669',
     example: 'Campainha DIN 230V, Telerruptor 16A, Minuteria Escada, Pente 1P+N',
   },
+  enclosure: {
+    code: 'enclosure',
+    name: 'Quadros & Invólucros Elétricos',
+    defaultPrefix: 'QD',
+    defaultHeightMm: 600,
+    defaultColor: '#0284c7',
+    example: 'Schneider Spacial S3D 600x800x250mm IP66',
+  },
 };
 
 /**
